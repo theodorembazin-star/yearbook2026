@@ -350,7 +350,7 @@ export default function YearbookView({
                 professeurs
               </p>
               <p className="mt-3 text-[11px] italic leading-relaxed text-white/40">
-                Les délégués font ensuite le tri pour que le rendu final
+                Les délégués feront ensuite le tri pour que le rendu final
                 ressemble à toute la promo.
               </p>
             </div>
