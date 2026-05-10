@@ -11,18 +11,14 @@ type Props = {
 
 // Resistance zone, in viewport heights. The first 100vh is the hero itself;
 // the remainder is where you scroll but the hero stays in front, fading
-// out smoothly. Kept short on purpose — the goal is a soft hand-over,
-// not a workout.
+// out smoothly.
 const HERO_HEIGHT_VH = 135;
-// How far through the resistance the user must drag before we consider it
-// a commit. Below the threshold we snap back to the welcome screen.
+// Cross this fraction of the resistance and you commit forward, immediately.
 const COMMIT_THRESHOLD = 0.4;
-// Time after the last scroll event before we decide to snap.
-const SCROLL_END_DEBOUNCE_MS = 140;
-// Snap animation duration in ms.
-const SNAP_DURATION_MS = 720;
+// Time after the last scroll event before we snap back to the home.
+const SCROLL_END_DEBOUNCE_MS = 100;
+const SNAP_DURATION_MS = 700;
 
-// Custom ease-in-out (quintic) — feels softer than the browser default.
 function easeInOutQuint(t: number): number {
   return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
 }
@@ -79,29 +75,55 @@ export default function Hero({ title, tagline, onProgress }: Props) {
       setProgress(r.p);
     }
 
-    async function onScrollEnd() {
+    async function snapTo(target: number) {
       if (snapping) return;
-      const r = readProgress();
-      if (!r) return;
-      if (r.p <= 0.02 || r.p >= 0.98) return;
-      const target =
-        r.p < COMMIT_THRESHOLD ? 0 : r.topY + r.total + window.innerHeight;
       snapping = true;
+      if (endTimer) {
+        clearTimeout(endTimer);
+        endTimer = null;
+      }
       try {
         await smoothScrollTo(target, SNAP_DURATION_MS);
       } finally {
-        // Brief grace period to ignore the trailing scroll events from the
-        // animation itself.
+        // Short grace period so trailing scroll events from the animation
+        // itself don't re-trigger us.
         setTimeout(() => {
           snapping = false;
-        }, 80);
+        }, 60);
       }
     }
 
     function onScroll() {
       if (!raf) raf = requestAnimationFrame(update);
+      if (snapping) return;
+
+      const r = readProgress();
+      if (!r) return;
+
+      // Already settled at one of the two stable states — leave alone.
+      if (r.p <= 0.02 || r.p >= 0.98) {
+        if (endTimer) {
+          clearTimeout(endTimer);
+          endTimer = null;
+        }
+        return;
+      }
+
+      // Real-time forward commit: the moment the visitor crosses the
+      // threshold, we yank them into the yearbook. No waiting.
+      if (r.p >= COMMIT_THRESHOLD) {
+        void snapTo(r.topY + r.total + window.innerHeight);
+        return;
+      }
+
+      // Below the threshold: schedule a snap back to the home if scroll
+      // stops here. Re-armed on every scroll event.
       if (endTimer) clearTimeout(endTimer);
-      endTimer = setTimeout(onScrollEnd, SCROLL_END_DEBOUNCE_MS);
+      endTimer = setTimeout(() => {
+        const r2 = readProgress();
+        if (!r2 || r2.p <= 0.02 || r2.p >= 0.98) return;
+        if (r2.p < COMMIT_THRESHOLD) void snapTo(0);
+      }, SCROLL_END_DEBOUNCE_MS);
     }
 
     update();
@@ -119,12 +141,9 @@ export default function Hero({ title, tagline, onProgress }: Props) {
     if (typeof window === "undefined") return;
     const el = ref.current;
     if (!el) return;
-    const target = el.offsetTop + el.offsetHeight;
-    void smoothScrollTo(target, SNAP_DURATION_MS);
+    void smoothScrollTo(el.offsetTop + el.offsetHeight, SNAP_DURATION_MS);
   }
 
-  // Linear fade through the resistance zone — feels more like a
-  // crossfade than the previous eased fade-then-snap.
   const fadeOpacity = 1 - progress;
   const fadeTranslate = progress * -28;
 
@@ -132,7 +151,10 @@ export default function Hero({ title, tagline, onProgress }: Props) {
     <section
       ref={ref}
       className="relative w-full"
-      style={{ height: `${HERO_HEIGHT_VH}vh` }}
+      style={{
+        height: `${HERO_HEIGHT_VH}vh`,
+        scrollSnapAlign: "start",
+      }}
     >
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center px-6 text-center">
         <div

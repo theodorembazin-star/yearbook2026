@@ -23,6 +23,15 @@ html {
   );
   background-attachment: fixed;
   min-height: 100%;
+  /* Native backstop for the hero/content hand-over: combined with
+     scroll-snap-align on the hero section and on #yearbook-content,
+     the browser will not let the viewport rest mid-transition. */
+  scroll-snap-type: y mandatory;
+}
+
+/* Inside the yearbook content, scroll is free again. */
+#yearbook-content {
+  scroll-snap-align: start;
 }
 body {
   background: transparent;
