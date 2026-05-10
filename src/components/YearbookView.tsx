@@ -349,6 +349,10 @@ export default function YearbookView({
                 Réservé aux 2e année de la prépa de l'Essouriau et à leurs
                 professeurs
               </p>
+              <p className="mt-3 text-[11px] italic leading-relaxed text-white/40">
+                Les délégués font ensuite le tri pour que le rendu final
+                ressemble à toute la promo.
+              </p>
             </div>
           )}
           <button
