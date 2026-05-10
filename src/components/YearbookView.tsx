@@ -39,20 +39,29 @@ export default function YearbookView({
   const [adminOpen, setAdminOpen] = useState(false);
   const [activePeople, setActivePeople] = useState<string[]>([]);
 
-  // Single source of truth for refetching photos. Used by Realtime, the
-  // upload commit, and the per-photo admin actions (hide / delete) so the
-  // grid updates instantly without waiting for the websocket to fire.
+  // Single source of truth for refetching photos. Goes through a server
+  // endpoint that uses the service-role client, so it never gets blocked
+  // by RLS (the browser client + anon key sometimes returns empty here).
   const refreshPhotos = useCallback(async () => {
     if (demo || !isSupabaseConfigured()) return;
-    const supabase = supabaseBrowser();
-    const visibleStatuses = isAdmin ? ["published", "hidden"] : ["published"];
-    const { data } = await supabase
-      .from("photos")
-      .select("*, contributors(display_name), photo_people(person_id)")
-      .eq("yearbook_id", YEARBOOK_ID)
-      .in("status", visibleStatuses)
-      .order("taken_at", { ascending: true });
-    if (data) setPhotos(data.map(photoFromRow as never));
+    try {
+      const adminToken =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("admin") ?? ""
+          : "";
+      const res = await fetch(
+        `/api/photos${adminToken ? `?admin=${encodeURIComponent(adminToken)}` : ""}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        console.warn("refreshPhotos failed:", res.status);
+        return; // keep current state instead of blanking the grid
+      }
+      const { photos: rows } = (await res.json()) as { photos: unknown[] };
+      setPhotos((rows ?? []).map(photoFromRow as never));
+    } catch (e) {
+      console.warn("refreshPhotos network error:", e);
+    }
   }, [demo, isAdmin]);
 
   // Optimistic helpers — used in demo mode where there's no DB to refetch.
