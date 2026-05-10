@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn, schoolYearOf, formatSchoolYear } from "@/lib/utils";
 
 type Section = { key: string; title: string; items: unknown[] };
@@ -29,7 +29,7 @@ export default function Timeline({ sections }: { sections: Section[] }) {
     return () => observer.disconnect();
   }, [sections]);
 
-  // Group sections by school year (Sept → Aug).
+  // Group sections by school year (Aug 20 cutoff).
   const groups = useMemo(() => {
     const out: { year: string; sections: { section: Section; index: number }[] }[] = [];
     sections.forEach((s, i) => {
@@ -45,16 +45,15 @@ export default function Timeline({ sections }: { sections: Section[] }) {
     activeIndex >= 0 ? schoolYearOf(sections[activeIndex]?.key ?? "") : null;
 
   return (
-    <nav aria-label="Frise chronologique" className="relative h-full">
-      <div className="timeline-rail absolute left-3 top-0 h-full w-px" />
-      <ul className="space-y-3">
+    <nav aria-label="Frise chronologique">
+      <ul className="space-y-5">
         {groups.map((g) => {
           const isActiveYear = g.year === activeYear;
           return (
             <li key={g.year}>
               <div
                 className={cn(
-                  "ml-1 mb-1 text-[10px] font-semibold uppercase tracking-widest transition-colors duration-300",
+                  "mb-2 font-display text-xs font-semibold uppercase tracking-[0.18em] transition-colors duration-300",
                   isActiveYear ? "text-ink" : "text-ink/35",
                 )}
               >
@@ -64,7 +63,6 @@ export default function Timeline({ sections }: { sections: Section[] }) {
                 {g.sections.map(({ section: s, index: i }) => {
                   const distance =
                     activeIndex === -1 ? 0 : Math.abs(i - activeIndex);
-                  const isActive = i === activeIndex;
                   const size =
                     distance === 0
                       ? "text-xl md:text-2xl font-display font-semibold leading-tight"
@@ -85,30 +83,15 @@ export default function Timeline({ sections }: { sections: Section[] }) {
                     <li key={s.key}>
                       <a
                         href={`#s-${s.key}`}
-                        className="group flex items-center gap-3 py-1"
+                        className={cn(
+                          "block py-1 tracking-tight capitalize transition-all duration-300 hover:text-ink",
+                          size,
+                          tone,
+                        )}
                       >
-                        <span
-                          className={cn(
-                            "ml-1.5 inline-block shrink-0 rounded-full transition-all duration-300",
-                            isActive
-                              ? "h-3 w-3 bg-ink"
-                              : distance === 1
-                                ? "h-2 w-2 border border-ink/40 bg-cream"
-                                : "h-1.5 w-1.5 border border-ink/30 bg-cream",
-                          )}
-                        />
-                        <span
-                          className={cn(
-                            "tracking-tight capitalize transition-all duration-300",
-                            size,
-                            tone,
-                            "group-hover:text-ink",
-                          )}
-                        >
-                          {/* Drop the year suffix here — the school year header
-                              already conveys the year context. */}
-                          {s.title.replace(/\s+\d{4}$/, "")}
-                        </span>
+                        {/* Drop the year suffix — the school-year header above
+                            already conveys the year context. */}
+                        {s.title.replace(/\s+\d{4}$/, "")}
                       </a>
                     </li>
                   );
