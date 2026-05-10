@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   title: string;
   tagline: string;
+  onProgress?: (progress: number) => void;
 };
 
 // Total scroll budget for the hero, in viewport heights. The first 100vh is
@@ -19,9 +20,13 @@ const HERO_HEIGHT_VH = 160;
 const SCROLL_END_DEBOUNCE_MS = 180;
 const COMMIT_THRESHOLD = 0.5;
 
-export default function Hero({ title, tagline }: Props) {
+export default function Hero({ title, tagline, onProgress }: Props) {
   const ref = useRef<HTMLElement>(null);
   const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    onProgress?.(progress);
+  }, [progress, onProgress]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -117,12 +122,12 @@ export default function Hero({ title, tagline }: Props) {
             willChange: "opacity, transform",
           }}
         >
-          <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
+          <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-white md:text-7xl lg:text-8xl">
             {title}
           </h1>
           {/* Same vertical slot as before (mt-8 max-w-xl) but left-aligned
               within its block instead of centered. */}
-          <p className="mt-8 max-w-xl text-left text-base text-ink/70 md:text-lg">
+          <p className="mt-8 max-w-xl text-left text-base text-white/75 md:text-lg">
             {tagline}
           </p>
         </div>
@@ -130,7 +135,7 @@ export default function Hero({ title, tagline }: Props) {
         <button
           onClick={scrollDown}
           aria-label="Découvrir le yearbook"
-          className="group absolute bottom-10 left-1/2 -translate-x-1/2 inline-flex flex-col items-center gap-2 text-ink/50 transition hover:text-ink"
+          className="group absolute bottom-10 left-1/2 -translate-x-1/2 inline-flex flex-col items-center gap-2 text-white/65 transition hover:text-white"
           style={{ opacity: 1 - progress, willChange: "opacity" }}
         >
           <span className="text-[10px] uppercase tracking-[0.3em]">Scroller</span>

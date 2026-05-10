@@ -2,13 +2,22 @@
 // Lightweight: downsamples to 80x80, buckets pixels by quantized RGB,
 // and ranks buckets by vibrance × frequency. No external dependency.
 
-// Blue-gold default palette — used before any photo is uploaded and as a
-// fallback when color extraction fails (CORS, etc.).
+// Blue-gold default palette — used in the yearbook view before any photo is
+// uploaded and as a fallback when color extraction fails (CORS, etc.).
 export const DEFAULT_PALETTE = [
   "#e6c567", // warm gold
   "#3d5a80", // deep blue
   "#d4a017", // bronze
   "#7a92ad", // muted blue
+];
+
+// Hero-only palette: deep navy + forest greens. Used while the user is on
+// the welcome screen, before they commit to scrolling into the yearbook.
+export const HERO_PALETTE = [
+  "#0f2a44", // deep navy
+  "#1f4d3a", // forest green
+  "#1a3d63", // muted dark blue
+  "#3a6b52", // sage green
 ];
 
 type Bucket = {

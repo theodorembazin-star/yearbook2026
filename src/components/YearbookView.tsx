@@ -5,7 +5,7 @@ import { Plus, Filter, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Aurora from "./Aurora";
 import Hero from "./Hero";
-import { extractPalette, DEFAULT_PALETTE } from "@/lib/colors";
+import { extractPalette, DEFAULT_PALETTE, HERO_PALETTE } from "@/lib/colors";
 import { YEARBOOK_TAGLINE } from "@/lib/config";
 import type { Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
@@ -120,6 +120,11 @@ export default function YearbookView({
 
   // ---------- Aurora palette derived from currently visible photos ----------
   const [palette, setPalette] = useState<string[]>(DEFAULT_PALETTE);
+  // While the visitor is on the welcome screen we override with a navy/green
+  // palette. Once they commit past the hero, we revert to the photo-derived
+  // palette below. Threshold is intentionally low so the swap happens early
+  // in the resistance zone — the Aurora's CSS transition smooths it out.
+  const [onHero, setOnHero] = useState(true);
   const palettesRef = useRef<Map<string, string[]>>(new Map());
   const visibleRef = useRef<Set<string>>(new Set());
   const photosRef = useRef<Photo[]>([]);
@@ -191,9 +196,13 @@ export default function YearbookView({
 
   return (
     <div className="min-h-screen">
-      <Aurora colors={palette} />
+      <Aurora colors={onHero ? HERO_PALETTE : palette} />
 
-      <Hero title={yearbook.title} tagline={YEARBOOK_TAGLINE} />
+      <Hero
+        title={yearbook.title}
+        tagline={YEARBOOK_TAGLINE}
+        onProgress={(p) => setOnHero(p < 0.5)}
+      />
 
       {/* `snap-y` + `snap-proximity` provides a gentle pull at month
           boundaries without hard-stopping the scroll. */}
