@@ -27,13 +27,14 @@ export async function POST(req: Request) {
     .from("photos")
     .createSignedUploadUrl(key);
   if (signErr || !signed) {
+    console.error("upload-url: signed URL failed", signErr);
     return NextResponse.json(
-      { error: signErr?.message ?? "sign_failed" },
+      { error: "sign_failed", detail: signErr?.message },
       { status: 500 },
     );
   }
 
-  await supabase.from("photos").insert({
+  const { error: insertErr } = await supabase.from("photos").insert({
     id: photoId,
     yearbook_id: YEARBOOK_ID,
     r2_key: key,
@@ -41,6 +42,23 @@ export async function POST(req: Request) {
     caption: parsed.data.caption,
     status: "pending",
   });
+  if (insertErr) {
+    console.error("upload-url: insert failed", insertErr);
+    // Most common cause: migration 0003 not applied → yearbook row missing,
+    // FK violation here.
+    return NextResponse.json(
+      {
+        error: "insert_failed",
+        detail: insertErr.message,
+        hint:
+          insertErr.message?.includes("foreign key") ||
+          insertErr.code === "23503"
+            ? "Apply supabase/migrations/0003_single_yearbook.sql"
+            : undefined,
+      },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({
     uploadUrl: signed.signedUrl,

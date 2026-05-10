@@ -39,6 +39,7 @@ export default function UploadDialog({
   );
   const [dragOver, setDragOver] = useState(false);
   const [tagged, setTagged] = useState<string[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const live = !demo && isSupabaseConfigured();
 
@@ -89,7 +90,12 @@ export default function UploadDialog({
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ contentType: compressed.type, takenAt }),
             });
-            if (!signRes.ok) throw new Error(`sign_failed: ${signRes.status}`);
+            if (!signRes.ok) {
+              const j = await signRes.json().catch(() => ({}));
+              throw new Error(
+                `upload-url ${signRes.status}: ${j.error ?? ""} ${j.detail ?? ""} ${j.hint ?? ""}`,
+              );
+            }
             const { photoId, key, token } = await signRes.json();
 
             const supabase = supabaseBrowser();
@@ -114,7 +120,9 @@ export default function UploadDialog({
             );
           }
         } catch (e) {
-          console.error(e);
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("upload error:", msg);
+          setErrors((prev) => ({ ...prev, [item.id]: msg }));
           setItems((prev) =>
             prev.map((p) => (p.id === item.id ? { ...p, status: "error" } : p)),
           );
@@ -258,6 +266,11 @@ export default function UploadDialog({
                       ? new Date(i.takenAt).toLocaleDateString("fr-FR")
                       : "lecture date…"}
                   </div>
+                  {errors[i.id] && (
+                    <div className="mt-1 truncate text-xs text-red-600">
+                      {errors[i.id]}
+                    </div>
+                  )}
                 </div>
                 <StatusIcon status={i.status} progress={i.progress} />
               </div>

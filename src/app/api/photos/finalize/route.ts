@@ -47,7 +47,13 @@ export async function POST(req: Request) {
     .update(update)
     .eq("id", parsed.data.photoId)
     .eq("yearbook_id", YEARBOOK_ID);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("finalize: update failed", error);
+    return NextResponse.json(
+      { error: "update_failed", detail: error.message },
+      { status: 500 },
+    );
+  }
 
   if (parsed.data.peopleIds && parsed.data.peopleIds.length > 0) {
     const rows = parsed.data.peopleIds.map((pid) => ({
