@@ -5,6 +5,7 @@ import type { Photo, Person } from "./types";
 import type { Database } from "./supabase/types";
 
 type DBPhoto = Database["public"]["Tables"]["photos"]["Row"] & {
+  uploader_name?: string | null;
   contributors: { display_name: string } | null;
   photo_people: { person_id: string }[] | null;
 };
@@ -26,7 +27,10 @@ export function photoFromRow(row: DBPhoto): Photo {
     taken_at: row.taken_at,
     uploaded_at: row.uploaded_at,
     uploader_id: row.uploader_id ?? "",
-    uploader_name: row.contributors?.display_name ?? "Anonyme",
+    // Prefer the denormalized name; fall back to the contributor join,
+    // then to a generic 'Anonyme' as a last resort.
+    uploader_name:
+      row.uploader_name ?? row.contributors?.display_name ?? "Anonyme",
     caption: row.caption ?? undefined,
     people_ids: (row.photo_people ?? []).map((p) => p.person_id),
     status: row.status,

@@ -36,6 +36,10 @@ export async function POST(req: Request) {
   const update: Record<string, unknown> = {
     status: "published",
     uploader_id: contrib?.id ?? null,
+    // Denormalize the uploader name onto the photo so the UI never has
+    // to chase the join — keeps the display reliable even if the
+    // contributors row was somehow lost.
+    uploader_name: parsed.data.uploaderName,
   };
   if (parsed.data.width) update.width = parsed.data.width;
   if (parsed.data.height) update.height = parsed.data.height;
