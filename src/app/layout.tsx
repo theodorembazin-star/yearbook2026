@@ -12,8 +12,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr">
       <body className="min-h-screen antialiased">
-        {children}
+        {/* Grain sits BEFORE children so photos and dialogs paint on top
+            of it — keeping their colors untouched while the canvas and
+            the aurora gain the printed-paper texture. */}
         <Grain />
+        {children}
       </body>
     </html>
   );

@@ -12,7 +12,7 @@ export default function Grain() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-[60] opacity-[0.32] mix-blend-overlay"
+      className="pointer-events-none fixed inset-0 z-0 opacity-[0.18] mix-blend-overlay"
       style={{
         backgroundImage: DATA_URL,
         backgroundRepeat: "repeat",
