@@ -55,7 +55,7 @@ export default function PhotoSection({
         <h2 className="font-display text-3xl font-semibold capitalize tracking-tight">
           {title}
         </h2>
-        <span className="text-sm text-ink/50">
+        <span className="text-sm text-white/50">
           {photos.length} photo{photos.length > 1 ? "s" : ""}
         </span>
       </div>
