@@ -112,7 +112,7 @@ function PhotoCard({
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent p-4 text-left opacity-0 transition group-hover:opacity-100">
           {photo.caption && (
-            <p className="font-hand text-lg text-white/90">{photo.caption}</p>
+            <p className="font-hand text-lg text-white/70">{photo.caption}</p>
           )}
           <p className="mt-1 text-xs text-white/80">
             {formatDateFr(photo.taken_at)} · par {photo.uploader_name}

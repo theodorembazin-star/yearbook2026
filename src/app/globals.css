@@ -28,7 +28,7 @@ body {
   background: transparent;
   /* The default text color carries an alpha channel so the canvas hue
      gently bleeds through every line of text. */
-  color: rgba(244, 234, 212, 0.9);
+  color: rgba(244, 234, 212, 0.7);
   font-family: var(--font-inter, "Inter"), system-ui, sans-serif;
 }
 

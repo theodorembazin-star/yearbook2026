@@ -341,7 +341,7 @@ function EmptyState({
   return (
     <div className="mt-16 rounded-3xl border-2 border-dashed border-white/15 p-12 text-center">
       <div className="text-5xl">📷</div>
-      <h2 className="font-display mt-3 text-2xl font-semibold text-white/90">
+      <h2 className="font-display mt-3 text-2xl font-semibold text-white/70">
         Pas encore de photo
       </h2>
       <p className="mt-2 text-white/60">
@@ -357,7 +357,7 @@ function EmptyState({
         {isAdmin && !hasPeople && (
           <button
             onClick={onAdminClick}
-            className="rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm text-white/90 hover:bg-white/15"
+            className="rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm text-white/70 hover:bg-white/15"
           >
             Configurer les membres
           </button>

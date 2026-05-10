@@ -122,7 +122,7 @@ export default function Hero({ title, tagline, onProgress }: Props) {
             willChange: "opacity, transform",
           }}
         >
-          <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-white/90 md:text-7xl lg:text-8xl">
+          <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-white/70 md:text-7xl lg:text-8xl">
             {title}
           </h1>
           {/* Same vertical slot as before (mt-8 max-w-xl) but left-aligned
