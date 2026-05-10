@@ -17,7 +17,7 @@ export default function Grain() {
         backgroundImage: DATA_URL,
         backgroundRepeat: "repeat",
         // Tile size scales the visible grain.
-        backgroundSize: "600px 600px",
+        backgroundSize: "400px 400px",
       }}
     />
   );
