@@ -120,7 +120,9 @@ export default function Hero({ title, tagline }: Props) {
           <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
             {title}
           </h1>
-          <p className="mt-8 max-w-xl text-base text-ink/70 md:text-lg">
+          {/* Same vertical slot as before (mt-8 max-w-xl) but left-aligned
+              within its block instead of centered. */}
+          <p className="mt-8 max-w-xl text-left text-base text-ink/70 md:text-lg">
             {tagline}
           </p>
         </div>
