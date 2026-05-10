@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Filter, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Aurora from "./Aurora";
+import { extractPalette, DEFAULT_PALETTE } from "@/lib/colors";
 import type { Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
 import Timeline from "./Timeline";
@@ -114,8 +116,80 @@ export default function YearbookView({
     setPhotos((prev) => [...prev, ...newPhotos]);
   }
 
+  // ---------- Aurora palette derived from currently visible photos ----------
+  const [palette, setPalette] = useState<string[]>(DEFAULT_PALETTE);
+  const palettesRef = useRef<Map<string, string[]>>(new Map());
+  const visibleRef = useRef<Set<string>>(new Set());
+  const photosRef = useRef<Photo[]>([]);
+  photosRef.current = photos;
+
+  // Extract palettes for every photo in the background, with a 2-concurrent
+  // queue so we don't block the main thread.
+  useEffect(() => {
+    let cancelled = false;
+    let inflight = 0;
+    const queue = photos.filter((p) => !palettesRef.current.has(p.id));
+    async function pump() {
+      while (!cancelled && queue.length > 0 && inflight < 2) {
+        const p = queue.shift()!;
+        inflight++;
+        extractPalette(p.thumb_url)
+          .then((palette) => {
+            if (cancelled) return;
+            palettesRef.current.set(p.id, palette);
+            // If this photo is currently the topmost visible, refresh palette.
+            const top = topmostVisiblePalette();
+            if (top) setPalette(top);
+          })
+          .finally(() => {
+            inflight--;
+            pump();
+          });
+      }
+    }
+    pump();
+    return () => {
+      cancelled = true;
+    };
+  }, [photos]);
+
+  function topmostVisiblePalette(): string[] | null {
+    const visible = visibleRef.current;
+    if (visible.size === 0) return null;
+    // Photos are already sorted ascending by date in the DOM order.
+    for (const p of photosRef.current) {
+      if (visible.has(p.id)) {
+        const palette = palettesRef.current.get(p.id);
+        if (palette) return palette;
+      }
+    }
+    return null;
+  }
+
+  // Observe photo cards: when a new one becomes visible, refresh aurora.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const id = (e.target as HTMLElement).dataset.photoId;
+          if (!id) continue;
+          if (e.isIntersecting) visibleRef.current.add(id);
+          else visibleRef.current.delete(id);
+        }
+        const top = topmostVisiblePalette();
+        if (top) setPalette(top);
+      },
+      { threshold: 0.35, rootMargin: "-10% 0px -40% 0px" },
+    );
+    document.querySelectorAll("[data-photo-id]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+    // Re-run when the rendered photo set changes
+  }, [sections]);
+
   return (
     <div className="min-h-screen">
+      <Aurora colors={palette} />
       {/* `snap-y` + `snap-proximity` provides a gentle pull at month
           boundaries without hard-stopping the scroll. */}
       <div className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6 pt-12">

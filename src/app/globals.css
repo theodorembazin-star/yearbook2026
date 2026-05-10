@@ -61,31 +61,15 @@ body {
   border-radius: 50%;
   filter: blur(80px);
   opacity: 0.65;
-  will-change: transform;
-  /* Centers are placed *inside* the viewport so the blurred body is
-     fully visible. Drift animations push them around from there. */
+  will-change: transform, background-color;
+  /* Smooth tween when the palette changes (scroll-driven from photos). */
+  transition: background 1.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.aurora-blob-1 {
-  top: -15%;
-  left: -10%;
-  background: #fbbf24; /* amber */
-}
-.aurora-blob-2 {
-  top: -10%;
-  right: -15%;
-  background: #ec4899; /* pink */
-}
-.aurora-blob-3 {
-  bottom: -20%;
-  left: 5%;
-  background: #c4451c; /* rust */
-}
-.aurora-blob-4 {
-  bottom: -15%;
-  right: 0%;
-  background: #8b5cf6; /* violet */
-}
+.aurora-blob-1 { top: -15%; left: -10%; }
+.aurora-blob-2 { top: -10%; right: -15%; }
+.aurora-blob-3 { bottom: -20%; left: 5%; }
+.aurora-blob-4 { bottom: -15%; right: 0%; }
 
 @media (prefers-reduced-motion: no-preference) {
   .aurora-blob-1 {

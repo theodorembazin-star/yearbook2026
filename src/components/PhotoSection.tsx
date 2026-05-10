@@ -52,6 +52,8 @@ function PhotoCard({ photo }: { photo: Photo }) {
     <>
       <button
         onClick={() => setOpen(true)}
+        data-photo-id={photo.id}
+        data-thumb-url={photo.thumb_url}
         className="group relative mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl"
         style={{ aspectRatio: `${w} / ${h}` }}
       >
