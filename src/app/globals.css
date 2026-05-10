@@ -166,88 +166,79 @@ body {
    already in place.
    -------------------------------------------------------------- */
 
-/* The flame glow lives on its own positioned div behind the letters
-   (cheap: one blurred radial-gradient, GPU-friendly). The text itself
-   only animates opacity + transform — no filter shifts per frame, so
-   the playback stays smooth. */
-.intro-flame {
+/* --------------------------------------------------------------
+   Intro: a glow halo blooms, the logo appears inside it, the glow
+   fades, the black overlay fades, the hero is revealed underneath.
+   GPU-friendly: only opacity + transform on real elements.
+   -------------------------------------------------------------- */
+
+.intro-overlay {
+  animation: intro-overlay 1400ms ease-out both;
+}
+
+.intro-glow {
   position: absolute;
-  inset: -60% -25% -10% -25%;
+  inset: -100% -60%;
   background: radial-gradient(
-    ellipse 60% 95% at 50% 95%,
-    rgba(225, 247, 255, 0.95) 0%,
-    rgba(140, 210, 245, 0.7) 22%,
-    rgba(60, 145, 215, 0.35) 50%,
-    transparent 78%
+    ellipse at center,
+    rgba(180, 230, 255, 0.95) 0%,
+    rgba(110, 195, 240, 0.55) 25%,
+    rgba(50, 140, 215, 0.3) 50%,
+    transparent 75%
   );
-  filter: blur(36px);
+  filter: blur(40px);
   pointer-events: none;
   will-change: opacity, transform;
-  animation: intro-flame 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: intro-glow 1400ms ease-out both;
 }
 
-.intro-title {
-  color: transparent;
-  background-image: linear-gradient(
-    180deg,
-    #eaf6ff 0%,
-    #b6dcf2 30%,
-    #4f9bcc 70%,
-    #1a4a78 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  /* A single static drop-shadow keeps the per-letter halo without
-     paying for an animated multi-stack filter. */
-  filter: drop-shadow(0 -4px 14px rgba(180, 235, 255, 0.7))
-    drop-shadow(0 -18px 40px rgba(90, 180, 230, 0.45));
+.intro-text {
+  color: white;
   will-change: opacity, transform;
-  animation: intro-title-in 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: intro-text 1400ms ease-out both;
 }
 
-.intro-sub {
-  color: transparent;
-  background-image: linear-gradient(
-    180deg,
-    #eaf6ff 0%,
-    #b6dcf2 30%,
-    #4f9bcc 70%,
-    #1a4a78 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  filter: drop-shadow(0 -3px 12px rgba(180, 235, 255, 0.65));
-  will-change: opacity, transform;
-  animation: intro-title-in 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) 150ms both;
-}
-
-@keyframes intro-flame {
-  0% {
-    opacity: 0;
-    transform: translateY(40%) scaleY(0.5);
-  }
-  35% {
+@keyframes intro-overlay {
+  0%,
+  70% {
     opacity: 1;
-    transform: translateY(15%) scaleY(0.85);
   }
   100% {
-    opacity: 0.55;
-    transform: translateY(0) scaleY(1);
+    opacity: 0;
   }
 }
 
-@keyframes intro-title-in {
+@keyframes intro-glow {
   0% {
     opacity: 0;
-    transform: translateY(10px) scale(1.02);
+    transform: scale(0.4);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
   }
   60% {
-    opacity: 0.85;
-    transform: translateY(2px) scale(1.005);
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+@keyframes intro-text {
+  0% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
 }
 

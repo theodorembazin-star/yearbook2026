@@ -1,15 +1,12 @@
 "use client";
 
-// Intro animation à la 'The Thing': the title emerges from black through
-// a cyan glow halo, settles, then the overlay fades to reveal the actual
-// hero underneath. While it plays the page is scroll-locked.
+// Minimal intro: a glow halo blooms, the logo appears inside it, the glow
+// fades, the black overlay fades, the hero is revealed underneath. Total
+// runtime ~1.4s. Scroll is locked while it plays.
 
 import { useEffect, useState } from "react";
 
-const PLAY_MS = 1000; // glow buildup + settle
-const FADE_MS = 400; // overlay fade-out
-
-type Phase = "playing" | "fading" | "done";
+const TOTAL_MS = 1400;
 
 type Props = {
   title: string;
@@ -17,48 +14,35 @@ type Props = {
 };
 
 export default function Intro({ title, subtitle }: Props) {
-  const [phase, setPhase] = useState<Phase>("playing");
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
     const html = document.documentElement;
-    const prevOverflow = html.style.overflow;
+    const prev = html.style.overflow;
     html.style.overflow = "hidden";
-
-    const t1 = setTimeout(() => setPhase("fading"), PLAY_MS);
-    const t2 = setTimeout(() => setPhase("done"), PLAY_MS + FADE_MS);
-
+    const t = setTimeout(() => {
+      setDone(true);
+      html.style.overflow = prev;
+    }, TOTAL_MS);
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      html.style.overflow = prevOverflow;
+      clearTimeout(t);
+      html.style.overflow = prev;
     };
   }, []);
 
-  // Re-allow scroll the moment we hide the overlay
-  useEffect(() => {
-    if (phase === "done") {
-      document.documentElement.style.overflow = "";
-    }
-  }, [phase]);
-
-  if (phase === "done") return null;
+  if (done) return null;
 
   return (
     <div
       aria-hidden
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black px-6 text-center transition-opacity duration-[900ms] ease-out ${
-        phase === "fading" ? "opacity-0" : "opacity-100"
-      }`}
+      className="intro-overlay fixed inset-0 z-[100] flex items-center justify-center bg-black px-6 text-center"
     >
-      <div className="intro-stage relative">
-        {/* Soft flame glow rising behind the letters. Cheap: a blurred
-            radial-gradient on a single positioned div, not a multi-stack
-            drop-shadow on transparent text. */}
-        <div className="intro-flame" />
-        <h1 className="intro-title relative font-display text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
+      <div className="relative">
+        <div className="intro-glow" />
+        <h1 className="intro-text relative font-display text-5xl font-bold leading-[1.05] tracking-tight md:text-7xl lg:text-8xl">
           {title}
           {subtitle && (
-            <span className="intro-sub mt-1 block text-left text-3xl font-semibold leading-tight md:text-5xl lg:text-6xl">
+            <span className="mt-1 block text-left text-3xl font-semibold leading-tight md:text-5xl lg:text-6xl">
               {subtitle}
             </span>
           )}
