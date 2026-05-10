@@ -337,9 +337,9 @@ export default function YearbookView({
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              <p className="font-display text-base leading-snug text-white/85 pr-5">
-                Des photos qui résument un moment marquant partagé par
-                plusieurs membres.
+              <p className="pr-5 text-base leading-snug text-white/85">
+                Veille à proposer des images qui résument un moment marquant
+                partagé par plusieurs membres.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-white/65">
                 Le contenu est en accès libre — pas d'image sans le
