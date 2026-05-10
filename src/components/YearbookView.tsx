@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Filter, Settings } from "lucide-react";
+import { Plus, Filter, Settings, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Aurora from "./Aurora";
 import Hero from "./Hero";
@@ -37,7 +37,19 @@ export default function YearbookView({
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [activePeople, setActivePeople] = useState<string[]>([]);
+
+  // Close the info popover when the user clicks anywhere else.
+  useEffect(() => {
+    if (!infoOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && !t.closest("[data-info-root]")) setInfoOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [infoOpen]);
 
   // Single source of truth for refetching photos. Goes through a server
   // endpoint that uses the service-role client, so it never gets blocked
@@ -307,12 +319,50 @@ export default function YearbookView({
           - Admin (only when authenticated): icon-only gear */}
       <div
         className={cn(
-          "fixed bottom-6 right-6 z-30 flex items-center gap-2 transition-all duration-500 ease-out",
+          "fixed bottom-6 right-6 z-30 flex items-end gap-2 transition-all duration-500 ease-out",
           onHero
             ? "pointer-events-none translate-y-32 opacity-0"
             : "translate-y-0 opacity-100",
         )}
       >
+        {/* Info popover — anchored above the icon button */}
+        <div className="relative" data-info-root>
+          {infoOpen && (
+            <div className="absolute bottom-full right-0 mb-3 w-72 rounded-2xl border border-white/10 bg-[#0d1422]/90 p-4 text-sm text-white/75 shadow-2xl backdrop-blur-2xl">
+              <button
+                type="button"
+                onClick={() => setInfoOpen(false)}
+                aria-label="Fermer"
+                className="absolute right-2 top-2 rounded-full p-1 text-white/50 hover:bg-white/10 hover:text-white/90"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <p className="pr-4">
+                Veille à mettre des photos qui synthétisent, pour toi, un
+                moment marquant pour plusieurs membres de la classe.
+              </p>
+              <p className="mt-3 text-xs text-white/50">
+                Cet outil est utilisé strictement dans le cadre de la classe
+                préparatoire de l'Essouriau.
+              </p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setInfoOpen((o) => !o)}
+            aria-label="Informations"
+            aria-expanded={infoOpen}
+            className={cn(
+              "inline-flex h-10 w-10 items-center justify-center rounded-full border bg-white/10 backdrop-blur transition",
+              infoOpen
+                ? "border-white/40 text-white"
+                : "border-white/15 text-white/80 hover:bg-white/20 hover:text-white",
+            )}
+          >
+            <Info className="h-4 w-4" />
+          </button>
+        </div>
+
         {isAdmin && (
           <button
             onClick={() => setAdminOpen(true)}
