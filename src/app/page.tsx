@@ -37,12 +37,15 @@ export default async function Page({
     // Use the admin client server-side so we can read regardless of RLS state
     // (which is currently disabled — see migration 0001).
     const supabase = supabaseAdmin();
+    // Admins also see hidden photos so they can manage them; visitors only
+    // get the published ones.
+    const visibleStatuses = isAdmin ? ["published", "hidden"] : ["published"];
     const [{ data: photos }, { data: people }] = await Promise.all([
       supabase
         .from("photos")
         .select("*, contributors(display_name), photo_people(person_id)")
         .eq("yearbook_id", YEARBOOK_ID)
-        .eq("status", "published")
+        .in("status", visibleStatuses)
         .order("taken_at", { ascending: true }),
       supabase
         .from("people")

@@ -49,11 +49,14 @@ export default function YearbookView({
         "postgres_changes",
         { event: "*", schema: "public", table: "photos", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
         async () => {
+          const visibleStatuses = isAdmin
+            ? ["published", "hidden"]
+            : ["published"];
           const { data } = await supabase
             .from("photos")
             .select("*, contributors(display_name), photo_people(person_id)")
             .eq("yearbook_id", YEARBOOK_ID)
-            .eq("status", "published")
+            .in("status", visibleStatuses)
             .order("taken_at", { ascending: true });
           if (data) setPhotos(data.map(photoFromRow as never));
         },
@@ -84,7 +87,7 @@ export default function YearbookView({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [demo]);
+  }, [demo, isAdmin]);
 
   const filtered = useMemo(() => {
     if (activePeople.length === 0) return photos;
@@ -247,6 +250,7 @@ export default function YearbookView({
                 id={`s-${s.key}`}
                 title={s.title}
                 photos={s.items}
+                isAdmin={isAdmin}
               />
             ))
           )}
