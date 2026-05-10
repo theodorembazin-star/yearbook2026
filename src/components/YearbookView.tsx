@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Filter, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Aurora from "./Aurora";
+import Hero from "./Hero";
 import { extractPalette, DEFAULT_PALETTE } from "@/lib/colors";
+import { YEARBOOK_TAGLINE } from "@/lib/config";
 import type { Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
 import Timeline from "./Timeline";
@@ -190,16 +192,21 @@ export default function YearbookView({
   return (
     <div className="min-h-screen">
       <Aurora colors={palette} />
+
+      <Hero title={yearbook.title} tagline={YEARBOOK_TAGLINE} />
+
       {/* `snap-y` + `snap-proximity` provides a gentle pull at month
           boundaries without hard-stopping the scroll. */}
-      <div className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6 pt-12">
+      <div
+        id="yearbook-content"
+        className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6 pt-12"
+      >
         <aside className="sticky top-12 hidden h-[calc(100vh-3rem)] w-44 shrink-0 lg:block">
           <Timeline sections={sections} />
         </aside>
 
         <main className="min-w-0 flex-1 pb-32">
-          <Cover
-            yearbook={yearbook}
+          <Stats
             photoCount={photos.length}
             contributors={contributorCount}
             demo={demo}
@@ -207,7 +214,7 @@ export default function YearbookView({
           />
 
           {people.length > 0 && (
-            <div className="mb-6 mt-10 flex items-center gap-3">
+            <div className="mb-6 mt-6 flex items-center gap-3">
               <Filter className="h-4 w-4 text-ink/60" />
               <PeopleFilter
                 people={people}
@@ -279,44 +286,35 @@ export default function YearbookView({
   );
 }
 
-function Cover({
-  yearbook,
+function Stats({
   photoCount,
   contributors,
   demo,
   isAdmin,
 }: {
-  yearbook: Yearbook;
   photoCount: number;
   contributors: number;
   demo: boolean;
   isAdmin: boolean;
 }) {
+  if (photoCount === 0 && !demo && !isAdmin) return null;
   return (
-    <section className="float-in border-b border-ink/10 pb-10">
-      <div className="text-6xl">{yearbook.cover_emoji}</div>
-      <h1 className="font-display mt-4 text-5xl font-bold leading-tight tracking-tight md:text-6xl">
-        {yearbook.title}
-      </h1>
-      <p className="mt-3 max-w-xl text-sm text-ink/60">
-        {photoCount > 0 ? (
-          <>
-            {photoCount} photo{photoCount > 1 ? "s" : ""} ·{" "}
-            {contributors || 1} contributeur{contributors > 1 ? "s" : ""}
-          </>
-        ) : (
-          <>Bientôt rempli de souvenirs.</>
-        )}
-        {(demo || isAdmin) && (
-          <>
-            {" · "}
-            {demo && <span className="text-accent">démo</span>}
-            {demo && isAdmin && " · "}
-            {isAdmin && <span className="text-ink">admin</span>}
-          </>
-        )}
-      </p>
-    </section>
+    <p className="float-in pb-2 text-xs text-ink/55">
+      {photoCount > 0 && (
+        <>
+          {photoCount} photo{photoCount > 1 ? "s" : ""} ·{" "}
+          {contributors || 1} contributeur{contributors > 1 ? "s" : ""}
+        </>
+      )}
+      {(demo || isAdmin) && (
+        <>
+          {photoCount > 0 ? " · " : ""}
+          {demo && <span className="text-accent">démo</span>}
+          {demo && isAdmin && " · "}
+          {isAdmin && <span className="text-ink/80">admin</span>}
+        </>
+      )}
+    </p>
   );
 }
 
