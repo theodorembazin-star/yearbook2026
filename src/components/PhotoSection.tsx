@@ -45,12 +45,7 @@ export default function PhotoSection({
   }, [photos]);
 
   return (
-    <section
-      id={id}
-      // Soft pull at the bottom of each month thanks to `snap-end`
-      // combined with `snap-y snap-proximity` on the parent.
-      className="snap-end scroll-mt-28 py-12"
-    >
+    <section id={id} className="scroll-mt-28 py-12">
       <div className="mb-6 flex items-baseline gap-4">
         <h2 className="font-display text-3xl font-semibold capitalize tracking-tight">
           {title}

@@ -151,10 +151,7 @@ export default function Hero({ title, tagline, onProgress }: Props) {
     <section
       ref={ref}
       className="relative w-full"
-      style={{
-        height: `${HERO_HEIGHT_VH}vh`,
-        scrollSnapAlign: "start",
-      }}
+      style={{ height: `${HERO_HEIGHT_VH}vh` }}
     >
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center px-6 text-center">
         <div
