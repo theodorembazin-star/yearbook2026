@@ -53,24 +53,24 @@ export default function Timeline({ sections }: { sections: Section[] }) {
             <li key={g.year}>
               <div
                 className={cn(
-                  "mb-2 font-display text-xs font-semibold uppercase tracking-[0.18em] transition-colors duration-300",
+                  "mb-3 font-display text-sm font-semibold uppercase tracking-[0.22em] transition-colors duration-300",
                   isActiveYear ? "text-ink" : "text-ink/35",
                 )}
               >
                 {formatSchoolYear(g.year)}
               </div>
-              <ul className="space-y-1">
+              <ul className="space-y-2">
                 {g.sections.map(({ section: s, index: i }) => {
                   const distance =
                     activeIndex === -1 ? 0 : Math.abs(i - activeIndex);
                   const size =
                     distance === 0
-                      ? "text-xl md:text-2xl font-display font-semibold leading-tight"
+                      ? "text-3xl md:text-4xl font-display font-semibold leading-tight"
                       : distance === 1
-                        ? "text-sm font-medium"
+                        ? "text-lg font-medium"
                         : distance === 2
-                          ? "text-xs"
-                          : "text-[11px]";
+                          ? "text-sm"
+                          : "text-xs";
                   const tone =
                     distance === 0
                       ? "text-ink"

@@ -210,7 +210,7 @@ export default function YearbookView({
         id="yearbook-content"
         className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6 pt-12"
       >
-        <aside className="sticky top-12 hidden h-[calc(100vh-3rem)] w-44 shrink-0 lg:block">
+        <aside className="sticky top-12 hidden h-[calc(100vh-3rem)] w-64 shrink-0 lg:block">
           <Timeline sections={sections} />
         </aside>
 
