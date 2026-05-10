@@ -208,7 +208,6 @@ function AdminControls({
   async function remove(e: React.MouseEvent) {
     e.stopPropagation();
     if (busy) return;
-    if (!confirm("Supprimer cette photo définitivement ?")) return;
     setBusy("delete");
     try {
       const res = await fetch(
