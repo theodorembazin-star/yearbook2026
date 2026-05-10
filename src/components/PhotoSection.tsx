@@ -17,9 +17,8 @@ export default function PhotoSection({
   return (
     <section
       id={id}
-      // `snap-end` aligns the bottom of each month with the viewport bottom
-      // when the user scrolls near a boundary. Combined with `snap-proximity`
-      // on the parent it adds a soft pull at the end of each month.
+      // Soft pull at the bottom of each month thanks to `snap-end`
+      // combined with `snap-y snap-proximity` on the parent.
       className="snap-end scroll-mt-28 py-12"
     >
       <div className="mb-6 flex items-baseline gap-4">
@@ -31,37 +30,39 @@ export default function PhotoSection({
         </span>
       </div>
 
-      {/* Magazine-style mosaic: alternating sizes */}
-      <div className="grid grid-cols-12 gap-4">
-        {photos.map((p, i) => (
-          <PhotoCard key={p.id} photo={p} index={i} total={photos.length} />
+      {/* CSS columns masonry: each photo flows at its natural aspect ratio,
+          taller photos take more vertical space without cropping. */}
+      <div className="columns-1 gap-4 md:columns-2 [column-fill:_balance]">
+        {photos.map((p) => (
+          <PhotoCard key={p.id} photo={p} />
         ))}
       </div>
     </section>
   );
 }
 
-function PhotoCard({ photo, index, total }: { photo: Photo; index: number; total: number }) {
+function PhotoCard({ photo }: { photo: Photo }) {
   const [open, setOpen] = useState(false);
 
-  // Simple mosaic heuristic: every 3rd photo is wider; first photo of section gets extra height.
-  const wide = index % 3 === 0 && total > 1;
-  const tall = index === 0 && total > 2;
-  const colSpan = wide ? "col-span-12 md:col-span-8" : "col-span-12 md:col-span-4";
-  const aspect = tall ? "aspect-[4/5]" : wide ? "aspect-[16/10]" : "aspect-[3/2]";
+  // Fall back to 3:2 if width/height are missing (older uploads).
+  const w = photo.width || 1200;
+  const h = photo.height || 800;
 
   return (
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`group relative ${colSpan} ${aspect} overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl`}
+        className="group relative mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl"
+        style={{ aspectRatio: `${w} / ${h}` }}
       >
         <Image
           src={photo.thumb_url}
           alt={photo.caption ?? "Photo"}
           fill
-          sizes="(max-width: 768px) 100vw, 800px"
-          className="object-cover transition duration-500 group-hover:scale-[1.03]"
+          // `object-contain` would letterbox; `object-cover` here is safe
+          // because the container already has the photo's exact ratio.
+          sizes="(max-width: 768px) 100vw, 600px"
+          className="object-cover transition duration-500 group-hover:scale-[1.02]"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent p-4 text-left opacity-0 transition group-hover:opacity-100">
           {photo.caption && (
@@ -91,8 +92,8 @@ function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
         <Image
           src={photo.url}
           alt={photo.caption ?? ""}
-          width={photo.width}
-          height={photo.height}
+          width={photo.width || 1200}
+          height={photo.height || 800}
           className="max-h-[80vh] w-auto rounded-xl object-contain"
         />
         <div className="mt-3 text-center text-cream">

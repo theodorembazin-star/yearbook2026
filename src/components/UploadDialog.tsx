@@ -21,10 +21,29 @@ type Pending = {
   file: File;
   preview: string;
   takenAt: string | null;
+  width?: number;
+  height?: number;
   status: "queued" | "processing" | "uploading" | "done" | "error";
   progress: number;
   remoteId?: string;
 };
+
+function readImageSize(blob: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const out = { width: img.naturalWidth, height: img.naturalHeight };
+      URL.revokeObjectURL(url);
+      resolve(out);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
 
 export default function UploadDialog({
   open,
@@ -80,6 +99,16 @@ export default function UploadDialog({
               );
             },
           });
+
+          // Read actual dimensions from the compressed bytes
+          const { width, height } = await readImageSize(compressed).catch(
+            () => ({ width: 0, height: 0 }),
+          );
+          setItems((prev) =>
+            prev.map((p) =>
+              p.id === item.id ? { ...p, width, height } : p,
+            ),
+          );
 
           if (live) {
             setItems((prev) =>
@@ -147,6 +176,8 @@ export default function UploadDialog({
             body: JSON.stringify({
               photoId: i.remoteId,
               takenAt: i.takenAt,
+              width: i.width,
+              height: i.height,
               uploaderName: name.trim(),
               peopleIds: tagged,
             }),
