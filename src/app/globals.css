@@ -5,12 +5,17 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Inter:wght@400;500;600&family=Caveat:wght@500;700&display=swap");
 
 :root {
-  --bg: #faf6ef;
+  --bg: #f8f1e3;
   --ink: #1a1410;
 }
 
-html, body {
+html {
+  /* Base canvas color. Body stays transparent so the fixed Aurora
+     behind the content can paint on top of it. */
   background: var(--bg);
+}
+body {
+  background: transparent;
   color: var(--ink);
   font-family: var(--font-inter, "Inter"), system-ui, sans-serif;
 }
@@ -20,22 +25,119 @@ html, body {
   color: #faf6ef;
 }
 
-/* Subtle paper grain */
-.paper {
-  background-color: #faf6ef;
-  background-image:
-    radial-gradient(rgba(26, 20, 16, 0.04) 1px, transparent 1px),
-    radial-gradient(rgba(26, 20, 16, 0.03) 1px, transparent 1px);
-  background-size: 24px 24px, 17px 17px;
-  background-position: 0 0, 8px 8px;
-}
-
 .timeline-rail {
-  background: linear-gradient(180deg, transparent, rgba(26, 20, 16, 0.15) 12%, rgba(26, 20, 16, 0.15) 88%, transparent);
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(26, 20, 16, 0.15) 12%,
+    rgba(26, 20, 16, 0.15) 88%,
+    transparent
+  );
 }
 
 @keyframes float-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.float-in { animation: float-in 0.6s ease-out both; }
+.float-in {
+  animation: float-in 0.6s ease-out both;
+}
+
+/* ============================================================
+   Aurora — large blurred color blobs slowly drifting in the
+   background. Apple-Music-Now-Playing vibe.
+   ============================================================ */
+
+.aurora-blob {
+  position: absolute;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.65;
+  will-change: transform;
+  /* Centers are placed *inside* the viewport so the blurred body is
+     fully visible. Drift animations push them around from there. */
+}
+
+.aurora-blob-1 {
+  top: -15%;
+  left: -10%;
+  background: #fbbf24; /* amber */
+}
+.aurora-blob-2 {
+  top: -10%;
+  right: -15%;
+  background: #ec4899; /* pink */
+}
+.aurora-blob-3 {
+  bottom: -20%;
+  left: 5%;
+  background: #c4451c; /* rust */
+}
+.aurora-blob-4 {
+  bottom: -15%;
+  right: 0%;
+  background: #8b5cf6; /* violet */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aurora-blob-1 {
+    animation: drift-1 32s ease-in-out infinite alternate;
+  }
+  .aurora-blob-2 {
+    animation: drift-2 41s ease-in-out infinite alternate;
+  }
+  .aurora-blob-3 {
+    animation: drift-3 37s ease-in-out infinite alternate;
+  }
+  .aurora-blob-4 {
+    animation: drift-4 45s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes drift-1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(15vw, 10vh) scale(1.15);
+  }
+}
+@keyframes drift-2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-12vw, 18vh) scale(0.9);
+  }
+}
+@keyframes drift-3 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(20vw, -12vh) scale(1.1);
+  }
+}
+@keyframes drift-4 {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-15vw, -10vh) scale(0.85);
+  }
+}
+
+/* Frosted glass for cards/dialogs that sit above the aurora */
+.glass {
+  background: rgba(250, 246, 239, 0.55);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
