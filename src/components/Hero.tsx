@@ -9,16 +9,42 @@ type Props = {
   onProgress?: (progress: number) => void;
 };
 
-// Total scroll budget for the hero, in viewport heights. The first 100vh is
-// the hero itself; the remainder (60vh here) is the "resistance" zone where
-// you scroll but the hero stays sticky in front, fading out gradually.
-const HERO_HEIGHT_VH = 160;
+// Resistance zone, in viewport heights. The first 100vh is the hero itself;
+// the remainder is where you scroll but the hero stays in front, fading
+// out smoothly. Kept short on purpose — the goal is a soft hand-over,
+// not a workout.
+const HERO_HEIGHT_VH = 135;
+// How far through the resistance the user must drag before we consider it
+// a commit. Below the threshold we snap back to the welcome screen.
+const COMMIT_THRESHOLD = 0.4;
+// Time after the last scroll event before we decide to snap.
+const SCROLL_END_DEBOUNCE_MS = 140;
+// Snap animation duration in ms.
+const SNAP_DURATION_MS = 720;
 
-// Once the user releases (180ms without a scroll event), we snap to either
-// the top (hero) or the start of the content — never leaving the viewport
-// stranded in between.
-const SCROLL_END_DEBOUNCE_MS = 180;
-const COMMIT_THRESHOLD = 0.5;
+// Custom ease-in-out (quintic) — feels softer than the browser default.
+function easeInOutQuint(t: number): number {
+  return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
+}
+
+function smoothScrollTo(target: number, duration: number): Promise<void> {
+  return new Promise((resolve) => {
+    const start = window.scrollY;
+    const distance = target - start;
+    if (Math.abs(distance) < 1) {
+      resolve();
+      return;
+    }
+    const startTime = performance.now();
+    function step() {
+      const t = Math.min(1, (performance.now() - startTime) / duration);
+      window.scrollTo(0, start + distance * easeInOutQuint(t));
+      if (t < 1) requestAnimationFrame(step);
+      else resolve();
+    }
+    requestAnimationFrame(step);
+  });
+}
 
 export default function Hero({ title, tagline, onProgress }: Props) {
   const ref = useRef<HTMLElement>(null);
@@ -53,23 +79,23 @@ export default function Hero({ title, tagline, onProgress }: Props) {
       setProgress(r.p);
     }
 
-    function onScrollEnd() {
-      // Don't fight our own programmatic scroll
+    async function onScrollEnd() {
       if (snapping) return;
       const r = readProgress();
       if (!r) return;
-      // Already at one of the two stable states — leave it alone.
       if (r.p <= 0.02 || r.p >= 0.98) return;
       const target =
         r.p < COMMIT_THRESHOLD ? 0 : r.topY + r.total + window.innerHeight;
-      // The hero parent is `HERO_HEIGHT_VH` tall. Forward target is the byte
-      // right after it, which puts the content at the top of the viewport.
       snapping = true;
-      window.scrollTo({ top: target, behavior: "smooth" });
-      // Release the lock once the smooth scroll has had time to settle.
-      setTimeout(() => {
-        snapping = false;
-      }, 700);
+      try {
+        await smoothScrollTo(target, SNAP_DURATION_MS);
+      } finally {
+        // Brief grace period to ignore the trailing scroll events from the
+        // animation itself.
+        setTimeout(() => {
+          snapping = false;
+        }, 80);
+      }
     }
 
     function onScroll() {
@@ -91,22 +117,16 @@ export default function Hero({ title, tagline, onProgress }: Props) {
 
   function scrollDown() {
     if (typeof window === "undefined") return;
-    const el = document.getElementById("yearbook-content");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      window.scrollTo({
-        top: window.innerHeight * (HERO_HEIGHT_VH / 100),
-        behavior: "smooth",
-      });
-    }
+    const el = ref.current;
+    if (!el) return;
+    const target = el.offsetTop + el.offsetHeight;
+    void smoothScrollTo(target, SNAP_DURATION_MS);
   }
 
-  // Ease the fade so the hero hangs on a bit longer before releasing.
-  const eased = Math.pow(progress, 1.4);
-  const heroOpacity = 1 - eased;
-  const heroTranslate = eased * -40;
-  const heroScale = 1 - eased * 0.04;
+  // Linear fade through the resistance zone — feels more like a
+  // crossfade than the previous eased fade-then-snap.
+  const fadeOpacity = 1 - progress;
+  const fadeTranslate = progress * -28;
 
   return (
     <section
@@ -117,16 +137,14 @@ export default function Hero({ title, tagline, onProgress }: Props) {
       <div className="sticky top-0 flex h-screen flex-col items-center justify-center px-6 text-center">
         <div
           style={{
-            opacity: heroOpacity,
-            transform: `translateY(${heroTranslate}px) scale(${heroScale})`,
+            opacity: fadeOpacity,
+            transform: `translateY(${fadeTranslate}px)`,
             willChange: "opacity, transform",
           }}
         >
           <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-white/70 md:text-7xl lg:text-8xl">
             {title}
           </h1>
-          {/* Same vertical slot as before (mt-8 max-w-xl) but left-aligned
-              within its block instead of centered. */}
           <p className="mt-8 max-w-xl text-left text-base text-white/75 md:text-lg">
             {tagline}
           </p>
@@ -135,7 +153,7 @@ export default function Hero({ title, tagline, onProgress }: Props) {
         <button
           onClick={scrollDown}
           aria-label="Découvrir le yearbook"
-          className="group absolute bottom-10 left-1/2 -translate-x-1/2 inline-flex flex-col items-center gap-2 text-white/65 transition hover:text-white"
+          className="group absolute bottom-10 left-1/2 -translate-x-1/2 inline-flex flex-col items-center gap-2 text-white/65 transition hover:text-white/70"
           style={{ opacity: 1 - progress, willChange: "opacity" }}
         >
           <span className="text-[10px] uppercase tracking-[0.3em]">Scroller</span>
