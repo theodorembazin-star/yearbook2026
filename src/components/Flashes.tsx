@@ -13,9 +13,9 @@ type Props = {
 };
 
 const COUNT = 10;
-// Total cycle: at COUNT=10 and DURATION≈20s with evenly spaced delays of 2s,
-// roughly one flash fires every 2 seconds.
-const BASE_DURATION = 20;
+// Tighter cycle: 6s base with 10 flashes evenly spaced means roughly one
+// flash every ~0.6s, and each pulse lasts a fraction of a second.
+const BASE_DURATION = 6;
 
 // Deterministic pseudo-random so SSR matches CSR.
 function r(seed: number, salt: number): number {
@@ -32,7 +32,7 @@ export default function Flashes({ colors }: Props) {
         top: r(i, 3) * 100,
         // Slight jitter on duration for an organic rhythm, but the BASE
         // determines the spacing.
-        duration: BASE_DURATION + Math.floor(r(i, 4) * 4) - 2, // 18-22s
+        duration: BASE_DURATION + r(i, 4) * 2 - 1, // 5-7s
         // Evenly spaced delays so flashes fire ~one every 2 seconds.
         delay: -(i * (BASE_DURATION / COUNT)) - r(i, 5) * 0.4,
         peak: 0.4 + r(i, 6) * 0.3, // 0.40 - 0.70 — brighter than before
