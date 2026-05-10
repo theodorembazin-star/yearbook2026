@@ -18,6 +18,7 @@ export type Person = {
   yearbook_id: string;
   name: string;
   cover_photo_id?: string;
+  cover_url?: string;
 };
 
 export type Photo = {

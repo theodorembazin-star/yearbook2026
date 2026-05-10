@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { verify } from "@/lib/tokens";
 import { supabaseAdmin, isServerConfigured } from "@/lib/supabase/server";
-
-// Called once the client has finished uploading the file. Marks the photo as
-// published and stores final metadata. In a full setup, this is where you'd
-// also enqueue the post-processing worker (EXIF, thumbnails, face embeddings).
+import { YEARBOOK_ID } from "@/lib/config";
 
 const Body = z.object({
-  token: z.string(),
   photoId: z.string().uuid(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   takenAt: z.string().datetime().optional(),
   caption: z.string().max(280).optional(),
   uploaderName: z.string().min(1).max(40),
+  peopleIds: z.array(z.string().uuid()).optional(),
 });
 
 export async function POST(req: Request) {
@@ -22,17 +18,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
   }
   const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const claims = verify(parsed.data.token);
-  if (!claims) return NextResponse.json({ error: "invalid_token" }, { status: 401 });
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
 
   const supabase = supabaseAdmin();
 
-  // Upsert contributor by display_name within this yearbook (anonymous-friendly)
   const { data: contrib } = await supabase
     .from("contributors")
     .upsert(
-      { yearbook_id: claims.yearbookId, display_name: parsed.data.uploaderName },
+      { yearbook_id: YEARBOOK_ID, display_name: parsed.data.uploaderName },
       { onConflict: "yearbook_id,display_name" },
     )
     .select("id")
@@ -51,8 +46,16 @@ export async function POST(req: Request) {
     .from("photos")
     .update(update)
     .eq("id", parsed.data.photoId)
-    .eq("yearbook_id", claims.yearbookId);
-
+    .eq("yearbook_id", YEARBOOK_ID);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (parsed.data.peopleIds && parsed.data.peopleIds.length > 0) {
+    const rows = parsed.data.peopleIds.map((pid) => ({
+      photo_id: parsed.data.photoId,
+      person_id: pid,
+    }));
+    await supabase.from("photo_people").upsert(rows, { onConflict: "photo_id,person_id" });
+  }
+
   return NextResponse.json({ ok: true });
 }

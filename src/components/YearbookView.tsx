@@ -1,67 +1,85 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Plus, Filter } from "lucide-react";
+import { Plus, Filter, Settings } from "lucide-react";
 import type { Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
 import Timeline from "./Timeline";
 import PhotoSection from "./PhotoSection";
 import UploadDialog from "./UploadDialog";
 import PeopleFilter from "./PeopleFilter";
+import AdminPanel from "./AdminPanel";
 import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
 import { photoFromRow } from "@/lib/db";
+import { YEARBOOK_ID } from "@/lib/config";
 
 type Props = {
   yearbook: Yearbook;
   photos: Photo[];
   people: Person[];
-  token: string | null;
+  isAdmin?: boolean;
   demo?: boolean;
 };
 
 export default function YearbookView({
   yearbook,
   photos: initial,
-  people,
-  token,
+  people: initialPeople,
+  isAdmin = false,
   demo = false,
 }: Props) {
   const [photos, setPhotos] = useState<Photo[]>(initial);
+  const [people, setPeople] = useState<Person[]>(initialPeople);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [activePeople, setActivePeople] = useState<string[]>([]);
 
-  // Realtime: listen for new published photos in this yearbook
+  // Realtime: refetch on any photo or person change
   useEffect(() => {
     if (demo || !isSupabaseConfigured()) return;
     const supabase = supabaseBrowser();
     const channel = supabase
-      .channel(`yearbook:${yearbook.id}`)
+      .channel(`yearbook:${YEARBOOK_ID}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "photos",
-          filter: `yearbook_id=eq.${yearbook.id}`,
-        },
+        { event: "*", schema: "public", table: "photos", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
         async () => {
-          // Re-fetch on any change — simpler than reconciling and good enough
-          // for the volume we expect (a few dozen uploads per minute max).
           const { data } = await supabase
             .from("photos")
             .select("*, contributors(display_name), photo_people(person_id)")
-            .eq("yearbook_id", yearbook.id)
+            .eq("yearbook_id", YEARBOOK_ID)
             .eq("status", "published")
             .order("taken_at", { ascending: true });
           if (data) setPhotos(data.map(photoFromRow as never));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "people", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
+        async () => {
+          const { data } = await supabase
+            .from("people")
+            .select("*")
+            .eq("yearbook_id", YEARBOOK_ID)
+            .order("created_at", { ascending: true });
+          if (data) {
+            setPeople(
+              data.map((p: { id: string; name: string; cover_url?: string | null; cover_photo_id?: string | null }) => ({
+                id: p.id,
+                yearbook_id: YEARBOOK_ID,
+                name: p.name,
+                cover_url: p.cover_url ?? undefined,
+                cover_photo_id: p.cover_photo_id ?? undefined,
+              })),
+            );
+          }
         },
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [yearbook.id, demo]);
+  }, [demo]);
 
   const filtered = useMemo(() => {
     if (activePeople.length === 0) return photos;
@@ -97,9 +115,17 @@ export default function YearbookView({
 
   return (
     <div className="min-h-screen">
-      <Header yearbook={yearbook} demo={demo} onUploadClick={() => setUploadOpen(true)} />
+      <Header
+        yearbook={yearbook}
+        demo={demo}
+        isAdmin={isAdmin}
+        onUploadClick={() => setUploadOpen(true)}
+        onAdminClick={() => setAdminOpen(true)}
+      />
 
-      <div className="mx-auto flex max-w-6xl gap-8 px-6">
+      {/* `snap-y` + `snap-proximity` provides a gentle pull at month
+          boundaries without hard-stopping the scroll. */}
+      <div className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6">
         <aside className="sticky top-24 hidden h-[calc(100vh-7rem)] w-44 shrink-0 lg:block">
           <Timeline sections={sections} />
         </aside>
@@ -119,10 +145,20 @@ export default function YearbookView({
           )}
 
           {sections.length === 0 ? (
-            <EmptyState onUploadClick={() => setUploadOpen(true)} />
+            <EmptyState
+              isAdmin={isAdmin}
+              hasPeople={people.length > 0}
+              onUploadClick={() => setUploadOpen(true)}
+              onAdminClick={() => setAdminOpen(true)}
+            />
           ) : (
             sections.map((s) => (
-              <PhotoSection key={s.key} id={`s-${s.key}`} title={s.title} photos={s.items} />
+              <PhotoSection
+                key={s.key}
+                id={`s-${s.key}`}
+                title={s.title}
+                photos={s.items}
+              />
             ))
           )}
         </main>
@@ -139,10 +175,16 @@ export default function YearbookView({
       <UploadDialog
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        yearbookId={yearbook.id}
-        token={token}
+        people={people}
         demo={demo}
         onUploaded={onUploaded}
+      />
+
+      <AdminPanel
+        open={adminOpen}
+        onClose={() => setAdminOpen(false)}
+        people={people}
+        demo={demo}
       />
     </div>
   );
@@ -151,18 +193,19 @@ export default function YearbookView({
 function Header({
   yearbook,
   demo,
+  isAdmin,
   onUploadClick,
+  onAdminClick,
 }: {
   yearbook: Yearbook;
   demo: boolean;
+  isAdmin: boolean;
   onUploadClick: () => void;
+  onAdminClick: () => void;
 }) {
   return (
     <header className="sticky top-0 z-20 border-b border-ink/10 bg-cream/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-ink/60 hover:text-ink">
-          <ArrowLeft className="h-4 w-4" /> Tous les yearbooks
-        </Link>
         <div className="font-display text-lg font-semibold">
           <span className="mr-2">{yearbook.cover_emoji}</span>
           {yearbook.title}
@@ -171,13 +214,28 @@ function Header({
               démo
             </span>
           )}
+          {isAdmin && (
+            <span className="ml-3 rounded-full bg-ink px-2 py-0.5 text-xs font-medium text-cream">
+              admin
+            </span>
+          )}
         </div>
-        <button
-          onClick={onUploadClick}
-          className="rounded-full border border-ink/15 bg-white px-4 py-2 text-sm hover:border-ink/40"
-        >
-          + Photos
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={onAdminClick}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 bg-white px-3 py-2 text-sm hover:border-ink/40"
+            >
+              <Settings className="h-4 w-4" /> Membres
+            </button>
+          )}
+          <button
+            onClick={onUploadClick}
+            className="rounded-full border border-ink/15 bg-white px-4 py-2 text-sm hover:border-ink/40"
+          >
+            + Photos
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -199,25 +257,56 @@ function Cover({
         {yearbook.title}
       </h1>
       <p className="mt-4 max-w-xl text-ink/70">
-        {photoCount} photo{photoCount > 1 ? "s" : ""} · {contributors || 1} contributeur
-        {contributors > 1 ? "s" : ""} · scroll pour traverser l'année
+        {photoCount > 0 ? (
+          <>
+            {photoCount} photo{photoCount > 1 ? "s" : ""} ·{" "}
+            {contributors || 1} contributeur{contributors > 1 ? "s" : ""} ·
+            scroll pour traverser l'année
+          </>
+        ) : (
+          <>Bientôt rempli de souvenirs.</>
+        )}
       </p>
     </section>
   );
 }
 
-function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
+function EmptyState({
+  isAdmin,
+  hasPeople,
+  onUploadClick,
+  onAdminClick,
+}: {
+  isAdmin: boolean;
+  hasPeople: boolean;
+  onUploadClick: () => void;
+  onAdminClick: () => void;
+}) {
   return (
     <div className="mt-16 rounded-3xl border-2 border-dashed border-ink/15 p-12 text-center">
       <div className="text-5xl">📷</div>
-      <h2 className="font-display mt-3 text-2xl font-semibold">Pas encore de photo</h2>
-      <p className="mt-2 text-ink/60">Sois le premier à en déposer pour démarrer la frise.</p>
-      <button
-        onClick={onUploadClick}
-        className="mt-6 rounded-full bg-accent px-6 py-3 text-cream"
-      >
-        Ajouter des photos
-      </button>
+      <h2 className="font-display mt-3 text-2xl font-semibold">
+        Pas encore de photo
+      </h2>
+      <p className="mt-2 text-ink/60">
+        Sois le premier à en déposer pour démarrer la frise.
+      </p>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <button
+          onClick={onUploadClick}
+          className="rounded-full bg-accent px-6 py-3 text-cream"
+        >
+          Ajouter des photos
+        </button>
+        {isAdmin && !hasPeople && (
+          <button
+            onClick={onAdminClick}
+            className="rounded-full border border-ink/15 bg-white px-6 py-3 text-sm hover:border-ink/40"
+          >
+            Configurer les membres
+          </button>
+        )}
+      </div>
     </div>
   );
 }

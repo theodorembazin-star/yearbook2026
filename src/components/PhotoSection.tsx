@@ -15,7 +15,13 @@ export default function PhotoSection({
   photos: Photo[];
 }) {
   return (
-    <section id={id} className="scroll-mt-28 py-12">
+    <section
+      id={id}
+      // `snap-end` aligns the bottom of each month with the viewport bottom
+      // when the user scrolls near a boundary. Combined with `snap-proximity`
+      // on the parent it adds a soft pull at the end of each month.
+      className="snap-end scroll-mt-28 py-12"
+    >
       <div className="mb-6 flex items-baseline gap-4">
         <h2 className="font-display text-3xl font-semibold capitalize tracking-tight">
           {title}

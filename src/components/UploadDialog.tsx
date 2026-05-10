@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { X, UploadCloud, Loader2, Check } from "lucide-react";
-import type { Photo } from "@/lib/types";
+import type { Photo, Person } from "@/lib/types";
 import { nanoid } from "nanoid";
 import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
+import { YEARBOOK_ID } from "@/lib/config";
+import { cn } from "@/lib/utils";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  yearbookId: string;
-  token: string | null;
+  people: Person[];
   demo?: boolean;
   onUploaded: (photos: Photo[]) => void;
 };
@@ -23,14 +24,12 @@ type Pending = {
   status: "queued" | "processing" | "uploading" | "done" | "error";
   progress: number;
   remoteId?: string;
-  remoteUrl?: string;
 };
 
 export default function UploadDialog({
   open,
   onClose,
-  yearbookId,
-  token,
+  people,
   demo = false,
   onUploaded,
 }: Props) {
@@ -39,8 +38,9 @@ export default function UploadDialog({
     typeof window !== "undefined" ? localStorage.getItem("yb_name") ?? "" : "",
   );
   const [dragOver, setDragOver] = useState(false);
+  const [tagged, setTagged] = useState<string[]>([]);
 
-  const live = !demo && isSupabaseConfigured() && !!token;
+  const live = !demo && isSupabaseConfigured();
 
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -81,58 +81,31 @@ export default function UploadDialog({
           });
 
           if (live) {
-            // 1. Ask the server for a signed upload URL
             setItems((prev) =>
               prev.map((p) => (p.id === item.id ? { ...p, status: "uploading" } : p)),
             );
             const signRes = await fetch("/api/photos/upload-url", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                token,
-                contentType: compressed.type,
-                takenAt,
-              }),
+              body: JSON.stringify({ contentType: compressed.type, takenAt }),
             });
             if (!signRes.ok) throw new Error(`sign_failed: ${signRes.status}`);
-            const { uploadUrl, photoId, key, token: storageToken } = await signRes.json();
+            const { photoId, key, token } = await signRes.json();
 
-            // 2. Upload the file to Supabase Storage (or R2 if swapped)
             const supabase = supabaseBrowser();
             const { error } = await supabase.storage
               .from("photos")
-              .uploadToSignedUrl(key, storageToken, compressed);
+              .uploadToSignedUrl(key, token, compressed);
             if (error) throw error;
 
-            // 3. Finalize: mark photo published, attach contributor
-            await fetch("/api/photos/finalize", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                token,
-                photoId,
-                takenAt,
-                uploaderName: name.trim(),
-              }),
-            });
-
-            const { data: pub } = supabase.storage.from("photos").getPublicUrl(key);
             setItems((prev) =>
               prev.map((p) =>
                 p.id === item.id
-                  ? {
-                      ...p,
-                      status: "done",
-                      progress: 100,
-                      takenAt,
-                      remoteId: photoId,
-                      remoteUrl: pub.publicUrl,
-                    }
+                  ? { ...p, status: "done", progress: 100, takenAt, remoteId: photoId }
                   : p,
               ),
             );
           } else {
-            // Demo mode: just simulate success with the local preview URL
             await new Promise((r) => setTimeout(r, 300));
             setItems((prev) =>
               prev.map((p) =>
@@ -148,19 +121,35 @@ export default function UploadDialog({
         }
       }
     },
-    [live, token, name],
+    [live],
   );
 
-  function commit() {
+  async function commit() {
     if (!name.trim()) return;
     localStorage.setItem("yb_name", name.trim());
     const done = items.filter((i) => i.status === "done");
-    // In live mode, Realtime will push the photos back into the view, so we
-    // only need to optimistically inject them in demo mode.
-    if (!live) {
+
+    if (live) {
+      // Finalize each photo (sets status=published, attaches contributor, tags people)
+      await Promise.all(
+        done.map((i) =>
+          fetch("/api/photos/finalize", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              photoId: i.remoteId,
+              takenAt: i.takenAt,
+              uploaderName: name.trim(),
+              peopleIds: tagged,
+            }),
+          }),
+        ),
+      );
+      // Realtime will push the published photos back.
+    } else {
       const photos: Photo[] = done.map((i) => ({
         id: i.id,
-        yearbook_id: yearbookId,
+        yearbook_id: YEARBOOK_ID,
         url: i.preview,
         thumb_url: i.preview,
         width: 1200,
@@ -169,20 +158,31 @@ export default function UploadDialog({
         uploaded_at: new Date().toISOString(),
         uploader_id: "local",
         uploader_name: name.trim(),
-        people_ids: [],
+        people_ids: tagged,
         status: "published",
       }));
       onUploaded(photos);
     }
+
     setItems([]);
+    setTagged([]);
     onClose();
   }
+
+  const canPublish = useMemo(
+    () =>
+      name.trim().length > 0 &&
+      items.length > 0 &&
+      items.every((i) => i.status === "done" || i.status === "error") &&
+      items.some((i) => i.status === "done"),
+    [name, items],
+  );
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="relative w-full max-w-2xl rounded-3xl bg-cream p-8 shadow-2xl">
+      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-cream p-8 shadow-2xl">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-full p-2 hover:bg-ink/5"
@@ -196,7 +196,7 @@ export default function UploadDialog({
         </p>
         {!live && (
           <p className="mt-2 inline-block rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-            Mode démo — les uploads sont simulés en local
+            Mode démo — uploads simulés en local
           </p>
         )}
 
@@ -226,9 +226,7 @@ export default function UploadDialog({
           }`}
         >
           <UploadCloud className="h-8 w-8 text-ink/40" />
-          <p className="mt-3 text-sm text-ink/70">
-            Glisse-dépose tes photos ici, ou
-          </p>
+          <p className="mt-3 text-sm text-ink/70">Glisse-dépose tes photos ici, ou</p>
           <label className="mt-2 cursor-pointer rounded-full bg-ink px-4 py-2 text-sm text-cream hover:opacity-90">
             Choisir des fichiers
             <input
@@ -245,17 +243,14 @@ export default function UploadDialog({
         </div>
 
         {items.length > 0 && (
-          <div className="mt-5 max-h-60 space-y-2 overflow-y-auto pr-1">
+          <div className="mt-5 space-y-2">
             {items.map((i) => (
               <div
                 key={i.id}
                 className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white/70 p-2"
               >
-                <img
-                  src={i.preview}
-                  alt=""
-                  className="h-12 w-12 rounded-lg object-cover"
-                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={i.preview} alt="" className="h-12 w-12 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{i.file.name}</div>
                   <div className="text-xs text-ink/50">
@@ -270,6 +265,48 @@ export default function UploadDialog({
           </div>
         )}
 
+        {people.length > 0 && items.length > 0 && (
+          <div className="mt-5">
+            <p className="text-sm font-medium">Qui est sur ces photos ?</p>
+            <p className="text-xs text-ink/50">
+              Optionnel — utile pour filtrer plus tard. S'applique à toutes les photos
+              de ce lot.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {people.map((p) => {
+                const active = tagged.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() =>
+                      setTagged((prev) =>
+                        active ? prev.filter((id) => id !== p.id) : [...prev, p.id],
+                      )
+                    }
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition",
+                      active
+                        ? "border-ink bg-ink text-cream"
+                        : "border-ink/15 bg-white hover:border-ink/40",
+                    )}
+                  >
+                    {p.cover_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.cover_url}
+                        alt=""
+                        className="h-4 w-4 rounded-full object-cover"
+                      />
+                    )}
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -279,16 +316,7 @@ export default function UploadDialog({
           </button>
           <button
             onClick={commit}
-            disabled={
-              !name.trim() ||
-              items.length === 0 ||
-              items.some(
-                (i) =>
-                  i.status === "processing" ||
-                  i.status === "queued" ||
-                  i.status === "uploading",
-              )
-            }
+            disabled={!canPublish}
             className="rounded-full bg-accent px-5 py-2 text-sm text-cream disabled:opacity-50"
           >
             Publier {items.filter((i) => i.status === "done").length} photo

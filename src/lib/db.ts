@@ -27,10 +27,13 @@ export function photoFromRow(row: DBPhoto): Photo {
   };
 }
 
-export type DBPerson = Database["public"]["Tables"]["people"]["Row"];
+export type DBPerson = Database["public"]["Tables"]["people"]["Row"] & {
+  cover_url?: string | null;
+};
 export const personFromRow = (row: DBPerson): Person => ({
   id: row.id,
   yearbook_id: row.yearbook_id,
   name: row.name,
   cover_photo_id: row.cover_photo_id ?? undefined,
+  cover_url: row.cover_url ?? undefined,
 });
