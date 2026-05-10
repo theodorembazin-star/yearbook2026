@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Filter, Settings } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
 import Timeline from "./Timeline";
@@ -115,23 +116,21 @@ export default function YearbookView({
 
   return (
     <div className="min-h-screen">
-      <Header
-        yearbook={yearbook}
-        demo={demo}
-        isAdmin={isAdmin}
-        onUploadClick={() => setUploadOpen(true)}
-        onAdminClick={() => setAdminOpen(true)}
-      />
-
       {/* `snap-y` + `snap-proximity` provides a gentle pull at month
           boundaries without hard-stopping the scroll. */}
-      <div className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6">
-        <aside className="sticky top-24 hidden h-[calc(100vh-7rem)] w-44 shrink-0 lg:block">
+      <div className="snap-y snap-proximity mx-auto flex max-w-6xl gap-8 px-6 pt-12">
+        <aside className="sticky top-12 hidden h-[calc(100vh-3rem)] w-44 shrink-0 lg:block">
           <Timeline sections={sections} />
         </aside>
 
         <main className="min-w-0 flex-1 pb-32">
-          <Cover yearbook={yearbook} photoCount={photos.length} contributors={contributorCount} />
+          <Cover
+            yearbook={yearbook}
+            photoCount={photos.length}
+            contributors={contributorCount}
+            demo={demo}
+            isAdmin={isAdmin}
+          />
 
           {people.length > 0 && (
             <div className="mb-6 mt-10 flex items-center gap-3">
@@ -164,13 +163,29 @@ export default function YearbookView({
         </main>
       </div>
 
-      <button
-        onClick={() => setUploadOpen(true)}
-        className="fixed bottom-8 right-8 z-30 inline-flex items-center gap-2 rounded-full bg-accent px-6 py-4 text-cream shadow-2xl shadow-accent/30 transition hover:scale-105"
-      >
-        <Plus className="h-5 w-5" />
-        Ajouter des photos
-      </button>
+      {/* Discreet floating actions bottom-right.
+          - Upload: small pill, neutral colors
+          - Admin (only when authenticated): icon-only gear */}
+      <div className="fixed bottom-6 right-6 z-30 flex items-center gap-2">
+        {isAdmin && (
+          <button
+            onClick={() => setAdminOpen(true)}
+            aria-label="Membres"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-ink/10 bg-white/90 text-ink/70 shadow-sm backdrop-blur transition hover:bg-white hover:text-ink"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          onClick={() => setUploadOpen(true)}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border border-ink/10 bg-white/90 px-4 py-2 text-sm text-ink/80 shadow-sm backdrop-blur transition hover:bg-white hover:text-ink",
+          )}
+        >
+          <Plus className="h-4 w-4" />
+          Ajouter une photo
+        </button>
+      </div>
 
       <UploadDialog
         open={uploadOpen}
@@ -190,81 +205,41 @@ export default function YearbookView({
   );
 }
 
-function Header({
-  yearbook,
-  demo,
-  isAdmin,
-  onUploadClick,
-  onAdminClick,
-}: {
-  yearbook: Yearbook;
-  demo: boolean;
-  isAdmin: boolean;
-  onUploadClick: () => void;
-  onAdminClick: () => void;
-}) {
-  return (
-    <header className="sticky top-0 z-20 border-b border-ink/10 bg-cream/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <div className="font-display text-lg font-semibold">
-          <span className="mr-2">{yearbook.cover_emoji}</span>
-          {yearbook.title}
-          {demo && (
-            <span className="ml-3 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
-              démo
-            </span>
-          )}
-          {isAdmin && (
-            <span className="ml-3 rounded-full bg-ink px-2 py-0.5 text-xs font-medium text-cream">
-              admin
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              onClick={onAdminClick}
-              className="inline-flex items-center gap-1.5 rounded-full border border-ink/15 bg-white px-3 py-2 text-sm hover:border-ink/40"
-            >
-              <Settings className="h-4 w-4" /> Membres
-            </button>
-          )}
-          <button
-            onClick={onUploadClick}
-            className="rounded-full border border-ink/15 bg-white px-4 py-2 text-sm hover:border-ink/40"
-          >
-            + Photos
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
 function Cover({
   yearbook,
   photoCount,
   contributors,
+  demo,
+  isAdmin,
 }: {
   yearbook: Yearbook;
   photoCount: number;
   contributors: number;
+  demo: boolean;
+  isAdmin: boolean;
 }) {
   return (
-    <section className="float-in mt-10 border-b border-ink/10 pb-10">
-      <div className="text-7xl">{yearbook.cover_emoji}</div>
+    <section className="float-in border-b border-ink/10 pb-10">
+      <div className="text-6xl">{yearbook.cover_emoji}</div>
       <h1 className="font-display mt-4 text-5xl font-bold leading-tight tracking-tight md:text-6xl">
         {yearbook.title}
       </h1>
-      <p className="mt-4 max-w-xl text-ink/70">
+      <p className="mt-3 max-w-xl text-sm text-ink/60">
         {photoCount > 0 ? (
           <>
             {photoCount} photo{photoCount > 1 ? "s" : ""} ·{" "}
-            {contributors || 1} contributeur{contributors > 1 ? "s" : ""} ·
-            scroll pour traverser l'année
+            {contributors || 1} contributeur{contributors > 1 ? "s" : ""}
           </>
         ) : (
           <>Bientôt rempli de souvenirs.</>
+        )}
+        {(demo || isAdmin) && (
+          <>
+            {" · "}
+            {demo && <span className="text-accent">démo</span>}
+            {demo && isAdmin && " · "}
+            {isAdmin && <span className="text-ink">admin</span>}
+          </>
         )}
       </p>
     </section>
