@@ -220,32 +220,35 @@ export default function UploadDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-cream p-8 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-white/10 bg-[#0d1422]/85 p-8 text-white/85 shadow-2xl backdrop-blur-2xl">
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-full p-2 hover:bg-ink/5"
+          aria-label="Fermer"
+          className="absolute right-4 top-4 rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
         >
           <X className="h-5 w-5" />
         </button>
 
-        <h2 className="font-display text-3xl font-bold tracking-tight">Ajouter des photos</h2>
-        <p className="mt-1 text-sm text-ink/60">
+        <h2 className="font-display text-3xl font-bold tracking-tight text-white/90">
+          Ajouter des photos
+        </h2>
+        <p className="mt-1 text-sm text-white/55">
           Pas besoin de compte. Juste un prénom pour qu'on sache à qui dire merci.
         </p>
         {!live && (
-          <p className="mt-2 inline-block rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+          <p className="mt-2 inline-block rounded-full bg-accent/20 px-3 py-1 text-xs font-medium text-accent">
             Mode démo — uploads simulés en local
           </p>
         )}
 
         <label className="mt-6 block">
-          <span className="text-sm font-medium">Ton prénom</span>
+          <span className="text-sm font-medium text-white/80">Ton prénom</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Léa"
-            className="mt-2 w-full rounded-xl border border-ink/15 bg-white px-4 py-2 outline-none focus:border-accent"
+            className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-white placeholder-white/30 outline-none transition focus:border-accent focus:bg-white/10"
           />
         </label>
 
@@ -260,13 +263,18 @@ export default function UploadDialog({
             setDragOver(false);
             void addFiles(e.dataTransfer.files);
           }}
-          className={`mt-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition ${
-            dragOver ? "border-accent bg-accent/5" : "border-ink/15"
-          }`}
+          className={cn(
+            "mt-6 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition",
+            dragOver
+              ? "border-accent bg-accent/10"
+              : "border-white/15 bg-white/[0.03]",
+          )}
         >
-          <UploadCloud className="h-8 w-8 text-ink/40" />
-          <p className="mt-3 text-sm text-ink/70">Glisse-dépose tes photos ici, ou</p>
-          <label className="mt-2 cursor-pointer rounded-full bg-ink px-4 py-2 text-sm text-cream hover:opacity-90">
+          <UploadCloud className="h-8 w-8 text-white/45" />
+          <p className="mt-3 text-sm text-white/65">
+            Glisse-dépose tes photos ici, ou
+          </p>
+          <label className="mt-2 cursor-pointer rounded-full bg-white/15 px-4 py-2 text-sm text-white/90 backdrop-blur transition hover:bg-white/25">
             Choisir des fichiers
             <input
               type="file"
@@ -276,7 +284,7 @@ export default function UploadDialog({
               onChange={(e) => e.target.files && addFiles(e.target.files)}
             />
           </label>
-          <p className="mt-2 text-xs text-ink/40">
+          <p className="mt-2 text-xs text-white/35">
             Date de prise de vue lue automatiquement (EXIF) · compression côté navigateur
           </p>
         </div>
@@ -286,19 +294,19 @@ export default function UploadDialog({
             {items.map((i) => (
               <div
                 key={i.id}
-                className="flex items-center gap-3 rounded-xl border border-ink/10 bg-white/70 p-2"
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={i.preview} alt="" className="h-12 w-12 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{i.file.name}</div>
-                  <div className="text-xs text-ink/50">
+                  <div className="truncate text-sm text-white/80">{i.file.name}</div>
+                  <div className="text-xs text-white/45">
                     {i.takenAt
                       ? new Date(i.takenAt).toLocaleDateString("fr-FR")
                       : "lecture date…"}
                   </div>
                   {errors[i.id] && (
-                    <div className="mt-1 truncate text-xs text-red-600">
+                    <div className="mt-1 truncate text-xs text-red-400">
                       {errors[i.id]}
                     </div>
                   )}
@@ -311,10 +319,10 @@ export default function UploadDialog({
 
         {people.length > 0 && items.length > 0 && (
           <div className="mt-5">
-            <p className="text-sm font-medium">Qui est sur ces photos ?</p>
-            <p className="text-xs text-ink/50">
-              Optionnel — utile pour filtrer plus tard. S'applique à toutes les photos
-              de ce lot.
+            <p className="text-sm font-medium text-white/80">Qui est sur ces photos ?</p>
+            <p className="text-xs text-white/45">
+              Optionnel — utile pour filtrer plus tard. S'applique à toutes les
+              photos de ce lot.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {people.map((p) => {
@@ -331,8 +339,8 @@ export default function UploadDialog({
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition",
                       active
-                        ? "border-ink bg-ink text-cream"
-                        : "border-ink/15 bg-white hover:border-ink/40",
+                        ? "border-white bg-white text-ink/80"
+                        : "border-white/20 bg-white/5 text-white/75 hover:bg-white/15",
                     )}
                   >
                     {p.cover_url && (
@@ -351,17 +359,17 @@ export default function UploadDialog({
           </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-8 flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="rounded-full border border-ink/15 px-4 py-2 text-sm hover:border-ink/40"
+            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/75 transition hover:border-white/30 hover:text-white/90"
           >
             Annuler
           </button>
           <button
             onClick={commit}
             disabled={!canPublish}
-            className="rounded-full bg-accent px-5 py-2 text-sm text-cream disabled:opacity-50"
+            className="rounded-full bg-accent px-5 py-2 text-sm text-cream shadow-lg shadow-accent/20 transition hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100"
           >
             Publier {items.filter((i) => i.status === "done").length} photo
             {items.filter((i) => i.status === "done").length > 1 ? "s" : ""}
@@ -373,20 +381,20 @@ export default function UploadDialog({
 }
 
 function StatusIcon({ status, progress }: { status: Pending["status"]; progress: number }) {
-  if (status === "done") return <Check className="h-5 w-5 text-emerald-600" />;
-  if (status === "error") return <X className="h-5 w-5 text-red-600" />;
+  if (status === "done") return <Check className="h-5 w-5 text-emerald-400" />;
+  if (status === "error") return <X className="h-5 w-5 text-red-400" />;
   if (status === "uploading")
     return (
-      <div className="flex items-center gap-1 text-xs text-ink/60">
+      <div className="flex items-center gap-1 text-xs text-white/55">
         <Loader2 className="h-4 w-4 animate-spin" /> upload
       </div>
     );
   if (status === "processing")
     return (
-      <div className="flex items-center gap-1 text-xs text-ink/60">
+      <div className="flex items-center gap-1 text-xs text-white/55">
         <Loader2 className="h-4 w-4 animate-spin" />
         {Math.round(progress)}%
       </div>
     );
-  return <span className="text-xs text-ink/40">en attente</span>;
+  return <span className="text-xs text-white/35">en attente</span>;
 }
