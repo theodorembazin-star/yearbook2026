@@ -142,19 +142,19 @@ body {
 /* Hero-mode: drift roughly 3x faster, and the per-palette shift wrapper
    tightens its transition too so the whole composition feels punchier. */
 .aurora-fast .aurora-blob-1 {
-  animation-duration: 11s;
+  animation-duration: 4s;
 }
 .aurora-fast .aurora-blob-2 {
-  animation-duration: 14s;
+  animation-duration: 5s;
 }
 .aurora-fast .aurora-blob-3 {
-  animation-duration: 13s;
+  animation-duration: 4.5s;
 }
 .aurora-fast .aurora-blob-4 {
-  animation-duration: 15s;
+  animation-duration: 6s;
 }
 .aurora-fast .aurora-shift {
-  transition-duration: 0.9s;
+  transition-duration: 0.4s;
 }
 
 /* Frosted glass for cards/dialogs that sit above the aurora */
