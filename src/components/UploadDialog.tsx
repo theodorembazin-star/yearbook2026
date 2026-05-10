@@ -4,11 +4,14 @@ import { useCallback, useState } from "react";
 import { X, UploadCloud, Loader2, Check } from "lucide-react";
 import type { Photo } from "@/lib/types";
 import { nanoid } from "nanoid";
+import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   yearbookId: string;
+  token: string | null;
+  demo?: boolean;
   onUploaded: (photos: Photo[]) => void;
 };
 
@@ -17,95 +20,160 @@ type Pending = {
   file: File;
   preview: string;
   takenAt: string | null;
-  status: "queued" | "processing" | "done" | "error";
+  status: "queued" | "processing" | "uploading" | "done" | "error";
   progress: number;
+  remoteId?: string;
+  remoteUrl?: string;
 };
 
-export default function UploadDialog({ open, onClose, yearbookId, onUploaded }: Props) {
+export default function UploadDialog({
+  open,
+  onClose,
+  yearbookId,
+  token,
+  demo = false,
+  onUploaded,
+}: Props) {
   const [items, setItems] = useState<Pending[]>([]);
   const [name, setName] = useState<string>(() =>
     typeof window !== "undefined" ? localStorage.getItem("yb_name") ?? "" : "",
   );
   const [dragOver, setDragOver] = useState(false);
 
-  const addFiles = useCallback(async (files: FileList | File[]) => {
-    const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    const next: Pending[] = arr.map((file) => ({
-      id: nanoid(),
-      file,
-      preview: URL.createObjectURL(file),
-      takenAt: null,
-      status: "queued",
-      progress: 0,
-    }));
-    setItems((prev) => [...prev, ...next]);
+  const live = !demo && isSupabaseConfigured() && !!token;
 
-    // Process EXIF + compression sequentially (keeps memory low for large batches)
-    for (const item of next) {
-      setItems((prev) =>
-        prev.map((p) => (p.id === item.id ? { ...p, status: "processing" } : p)),
-      );
-      try {
-        const [{ default: exifr }, { default: imageCompression }] = await Promise.all([
-          import("exifr"),
-          import("browser-image-compression"),
-        ]);
-        const exif = await exifr.parse(item.file).catch(() => null);
-        const takenAt = exif?.DateTimeOriginal
-          ? new Date(exif.DateTimeOriginal).toISOString()
-          : new Date(item.file.lastModified).toISOString();
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      const next: Pending[] = arr.map((file) => ({
+        id: nanoid(),
+        file,
+        preview: URL.createObjectURL(file),
+        takenAt: null,
+        status: "queued",
+        progress: 0,
+      }));
+      setItems((prev) => [...prev, ...next]);
 
-        // Compress to ~1600px max edge for upload, keep original for high-quality export
-        await imageCompression(item.file, {
-          maxSizeMB: 1.5,
-          maxWidthOrHeight: 1600,
-          useWebWorker: true,
-          onProgress: (pct: number) => {
+      for (const item of next) {
+        setItems((prev) =>
+          prev.map((p) => (p.id === item.id ? { ...p, status: "processing" } : p)),
+        );
+        try {
+          const [{ default: exifr }, { default: imageCompression }] = await Promise.all([
+            import("exifr"),
+            import("browser-image-compression"),
+          ]);
+          const exif = await exifr.parse(item.file).catch(() => null);
+          const takenAt = exif?.DateTimeOriginal
+            ? new Date(exif.DateTimeOriginal).toISOString()
+            : new Date(item.file.lastModified).toISOString();
+
+          const compressed = await imageCompression(item.file, {
+            maxSizeMB: 1.5,
+            maxWidthOrHeight: 1600,
+            useWebWorker: true,
+            onProgress: (pct: number) => {
+              setItems((prev) =>
+                prev.map((p) => (p.id === item.id ? { ...p, progress: pct } : p)),
+              );
+            },
+          });
+
+          if (live) {
+            // 1. Ask the server for a signed upload URL
             setItems((prev) =>
-              prev.map((p) => (p.id === item.id ? { ...p, progress: pct } : p)),
+              prev.map((p) => (p.id === item.id ? { ...p, status: "uploading" } : p)),
             );
-          },
-        });
+            const signRes = await fetch("/api/photos/upload-url", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                token,
+                contentType: compressed.type,
+                takenAt,
+              }),
+            });
+            if (!signRes.ok) throw new Error(`sign_failed: ${signRes.status}`);
+            const { uploadUrl, photoId, key, token: storageToken } = await signRes.json();
 
-        // TODO: real upload to /api/photos/upload-url → R2 PUT presigned
-        // Simulating a successful upload here so the demo flow works without backend.
-        await new Promise((r) => setTimeout(r, 400));
+            // 2. Upload the file to Supabase Storage (or R2 if swapped)
+            const supabase = supabaseBrowser();
+            const { error } = await supabase.storage
+              .from("photos")
+              .uploadToSignedUrl(key, storageToken, compressed);
+            if (error) throw error;
 
-        setItems((prev) =>
-          prev.map((p) =>
-            p.id === item.id
-              ? { ...p, status: "done", progress: 100, takenAt }
-              : p,
-          ),
-        );
-      } catch (e) {
-        console.error(e);
-        setItems((prev) =>
-          prev.map((p) => (p.id === item.id ? { ...p, status: "error" } : p)),
-        );
+            // 3. Finalize: mark photo published, attach contributor
+            await fetch("/api/photos/finalize", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                token,
+                photoId,
+                takenAt,
+                uploaderName: name.trim(),
+              }),
+            });
+
+            const { data: pub } = supabase.storage.from("photos").getPublicUrl(key);
+            setItems((prev) =>
+              prev.map((p) =>
+                p.id === item.id
+                  ? {
+                      ...p,
+                      status: "done",
+                      progress: 100,
+                      takenAt,
+                      remoteId: photoId,
+                      remoteUrl: pub.publicUrl,
+                    }
+                  : p,
+              ),
+            );
+          } else {
+            // Demo mode: just simulate success with the local preview URL
+            await new Promise((r) => setTimeout(r, 300));
+            setItems((prev) =>
+              prev.map((p) =>
+                p.id === item.id ? { ...p, status: "done", progress: 100, takenAt } : p,
+              ),
+            );
+          }
+        } catch (e) {
+          console.error(e);
+          setItems((prev) =>
+            prev.map((p) => (p.id === item.id ? { ...p, status: "error" } : p)),
+          );
+        }
       }
-    }
-  }, []);
+    },
+    [live, token, name],
+  );
 
   function commit() {
     if (!name.trim()) return;
     localStorage.setItem("yb_name", name.trim());
     const done = items.filter((i) => i.status === "done");
-    const photos: Photo[] = done.map((i) => ({
-      id: i.id,
-      yearbook_id: yearbookId,
-      url: i.preview,
-      thumb_url: i.preview,
-      width: 1200,
-      height: 800,
-      taken_at: i.takenAt ?? new Date().toISOString(),
-      uploaded_at: new Date().toISOString(),
-      uploader_id: "local",
-      uploader_name: name.trim(),
-      people_ids: [],
-      status: "published",
-    }));
-    onUploaded(photos);
+    // In live mode, Realtime will push the photos back into the view, so we
+    // only need to optimistically inject them in demo mode.
+    if (!live) {
+      const photos: Photo[] = done.map((i) => ({
+        id: i.id,
+        yearbook_id: yearbookId,
+        url: i.preview,
+        thumb_url: i.preview,
+        width: 1200,
+        height: 800,
+        taken_at: i.takenAt ?? new Date().toISOString(),
+        uploaded_at: new Date().toISOString(),
+        uploader_id: "local",
+        uploader_name: name.trim(),
+        people_ids: [],
+        status: "published",
+      }));
+      onUploaded(photos);
+    }
     setItems([]);
     onClose();
   }
@@ -126,6 +194,11 @@ export default function UploadDialog({ open, onClose, yearbookId, onUploaded }: 
         <p className="mt-1 text-sm text-ink/60">
           Pas besoin de compte. Juste un prénom pour qu'on sache à qui dire merci.
         </p>
+        {!live && (
+          <p className="mt-2 inline-block rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+            Mode démo — les uploads sont simulés en local
+          </p>
+        )}
 
         <label className="mt-6 block">
           <span className="text-sm font-medium">Ton prénom</span>
@@ -209,7 +282,12 @@ export default function UploadDialog({ open, onClose, yearbookId, onUploaded }: 
             disabled={
               !name.trim() ||
               items.length === 0 ||
-              items.some((i) => i.status === "processing" || i.status === "queued")
+              items.some(
+                (i) =>
+                  i.status === "processing" ||
+                  i.status === "queued" ||
+                  i.status === "uploading",
+              )
             }
             className="rounded-full bg-accent px-5 py-2 text-sm text-cream disabled:opacity-50"
           >
@@ -225,6 +303,12 @@ export default function UploadDialog({ open, onClose, yearbookId, onUploaded }: 
 function StatusIcon({ status, progress }: { status: Pending["status"]; progress: number }) {
   if (status === "done") return <Check className="h-5 w-5 text-emerald-600" />;
   if (status === "error") return <X className="h-5 w-5 text-red-600" />;
+  if (status === "uploading")
+    return (
+      <div className="flex items-center gap-1 text-xs text-ink/60">
+        <Loader2 className="h-4 w-4 animate-spin" /> upload
+      </div>
+    );
   if (status === "processing")
     return (
       <div className="flex items-center gap-1 text-xs text-ink/60">
