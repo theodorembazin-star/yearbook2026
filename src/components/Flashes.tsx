@@ -13,6 +13,9 @@ type Props = {
 };
 
 const COUNT = 10;
+// Total cycle: at COUNT=10 and DURATION≈20s with evenly spaced delays of 2s,
+// roughly one flash fires every 2 seconds.
+const BASE_DURATION = 20;
 
 // Deterministic pseudo-random so SSR matches CSR.
 function r(seed: number, salt: number): number {
@@ -24,14 +27,15 @@ export default function Flashes({ colors }: Props) {
     () =>
       Array.from({ length: COUNT }, (_, i) => ({
         id: i,
-        size: 60 + Math.floor(r(i, 1) * 180), // 60 - 240 px
+        size: 420 + Math.floor(r(i, 1) * 1260), // 420 - 1680 px (7x previous)
         left: r(i, 2) * 100,
         top: r(i, 3) * 100,
-        // Each flash has a long cycle (10-22s) and is invisible for ~88% of
-        // it — so they only pop briefly and never all together.
-        duration: 10 + Math.floor(r(i, 4) * 12),
-        delay: -r(i, 5) * 22,
-        peak: 0.18 + r(i, 6) * 0.22, // 0.18 - 0.40
+        // Slight jitter on duration for an organic rhythm, but the BASE
+        // determines the spacing.
+        duration: BASE_DURATION + Math.floor(r(i, 4) * 4) - 2, // 18-22s
+        // Evenly spaced delays so flashes fire ~one every 2 seconds.
+        delay: -(i * (BASE_DURATION / COUNT)) - r(i, 5) * 0.4,
+        peak: 0.4 + r(i, 6) * 0.3, // 0.40 - 0.70 — brighter than before
         color: colors[i % colors.length] ?? "#ffffff",
       })),
     // Re-shuffle whenever the palette changes — flashes pick the new
@@ -53,8 +57,13 @@ export default function Flashes({ colors }: Props) {
             height: `${f.size}px`,
             left: `${f.left}%`,
             top: `${f.top}%`,
+            // Negative offset roughly centers each flash on its anchor
+            // point so the (left, top) feels like the flash center.
+            marginLeft: `-${f.size / 2}px`,
+            marginTop: `-${f.size / 2}px`,
             background: f.color,
-            filter: "blur(40px)",
+            filter: `blur(${Math.round(f.size * 0.16)}px)`,
+            mixBlendMode: "screen",
             ["--peak" as string]: f.peak.toFixed(3),
             animation: `flash-pulse ${f.duration}s ease-in-out ${f.delay}s infinite`,
           }}
