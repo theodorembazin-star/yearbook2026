@@ -13,4 +13,4 @@ export const YEARBOOK_EMOJI =
   process.env.NEXT_PUBLIC_YEARBOOK_EMOJI ?? "🎓";
 export const YEARBOOK_TAGLINE =
   process.env.NEXT_PUBLIC_YEARBOOK_TAGLINE ??
-  "Souvenirs collectifs de PCSI et PSI. Chacun dépose ses photos, elles se rangent par date et par personne. Scrolle pour traverser les deux années.";
+  "Souvenir collectif de la PSI PCSI";
