@@ -196,7 +196,7 @@ export default function YearbookView({
 
   return (
     <div className="min-h-screen">
-      <Aurora colors={onHero ? HERO_PALETTE : palette} />
+      <Aurora colors={onHero ? HERO_PALETTE : palette} fast={onHero} />
 
       <Hero
         title={yearbook.title}

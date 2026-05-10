@@ -12,6 +12,8 @@ import { DEFAULT_PALETTE } from "@/lib/colors";
 type Props = {
   /** 4 hex colors. Falls back to a warm default palette. */
   colors?: string[];
+  /** When true, the drift animation runs ~3x faster. */
+  fast?: boolean;
 };
 
 type Offset = { x: number; y: number };
@@ -26,7 +28,7 @@ function randomOffset(): Offset {
   };
 }
 
-export default function Aurora({ colors }: Props) {
+export default function Aurora({ colors, fast = false }: Props) {
   const c = (colors && colors.length === 4 ? colors : DEFAULT_PALETTE) as [
     string,
     string,
@@ -55,7 +57,10 @@ export default function Aurora({ colors }: Props) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+      className={
+        "pointer-events-none fixed inset-0 -z-10 overflow-hidden" +
+        (fast ? " aurora-fast" : "")
+      }
     >
       {([0, 1, 2, 3] as const).map((i) => (
         <div
