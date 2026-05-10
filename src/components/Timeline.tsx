@@ -67,10 +67,10 @@ export default function Timeline({ sections }: { sections: Section[] }) {
                     distance === 0
                       ? "text-3xl md:text-4xl font-display font-semibold leading-tight"
                       : distance === 1
-                        ? "text-lg font-medium"
+                        ? "text-2xl font-medium"
                         : distance === 2
-                          ? "text-sm"
-                          : "text-xs";
+                          ? "text-lg"
+                          : "text-base";
                   const tone =
                     distance === 0
                       ? "text-ink"
