@@ -338,12 +338,15 @@ export default function YearbookView({
                 <X className="h-3.5 w-3.5" />
               </button>
               <p className="pr-4">
-                Veille à mettre des photos qui synthétisent, pour toi, un
-                moment marquant pour plusieurs membres de la classe.
+                Photos qui résument un moment marquant partagé par plusieurs
+                membres.
+              </p>
+              <p className="mt-2 pr-4">
+                Le contenu est en accès libre — pas d'image sans le
+                consentement des personnes visibles.
               </p>
               <p className="mt-3 text-xs text-white/50">
-                Cet outil est utilisé strictement dans le cadre de la classe
-                préparatoire de l'Essouriau.
+                Outil réservé à la prépa de l'Essouriau.
               </p>
             </div>
           )}
