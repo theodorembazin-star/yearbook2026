@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Filter, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Aurora from "./Aurora";
@@ -39,6 +39,40 @@ export default function YearbookView({
   const [adminOpen, setAdminOpen] = useState(false);
   const [activePeople, setActivePeople] = useState<string[]>([]);
 
+  // Single source of truth for refetching photos. Used by Realtime, the
+  // upload commit, and the per-photo admin actions (hide / delete) so the
+  // grid updates instantly without waiting for the websocket to fire.
+  const refreshPhotos = useCallback(async () => {
+    if (demo || !isSupabaseConfigured()) return;
+    const supabase = supabaseBrowser();
+    const visibleStatuses = isAdmin ? ["published", "hidden"] : ["published"];
+    const { data } = await supabase
+      .from("photos")
+      .select("*, contributors(display_name), photo_people(person_id)")
+      .eq("yearbook_id", YEARBOOK_ID)
+      .in("status", visibleStatuses)
+      .order("taken_at", { ascending: true });
+    if (data) setPhotos(data.map(photoFromRow as never));
+  }, [demo, isAdmin]);
+
+  // Optimistic helpers — used in demo mode where there's no DB to refetch.
+  const optimisticUpdate = useCallback(
+    (id: string, patch: Partial<Photo>) => {
+      setPhotos((prev) => {
+        const out = prev.map((p) => (p.id === id ? { ...p, ...patch } : p));
+        // If we're not admin and the photo just became hidden, drop it from
+        // the local list too so the visitor view matches the server.
+        return isAdmin
+          ? out
+          : out.filter((p) => p.status !== "hidden");
+      });
+    },
+    [isAdmin],
+  );
+  const optimisticDelete = useCallback((id: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
   // Realtime: refetch on any photo or person change
   useEffect(() => {
     if (demo || !isSupabaseConfigured()) return;
@@ -48,17 +82,8 @@ export default function YearbookView({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "photos", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
-        async () => {
-          const visibleStatuses = isAdmin
-            ? ["published", "hidden"]
-            : ["published"];
-          const { data } = await supabase
-            .from("photos")
-            .select("*, contributors(display_name), photo_people(person_id)")
-            .eq("yearbook_id", YEARBOOK_ID)
-            .in("status", visibleStatuses)
-            .order("taken_at", { ascending: true });
-          if (data) setPhotos(data.map(photoFromRow as never));
+        () => {
+          void refreshPhotos();
         },
       )
       .on(
@@ -87,7 +112,7 @@ export default function YearbookView({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [demo, isAdmin]);
+  }, [demo, isAdmin, refreshPhotos]);
 
   const filtered = useMemo(() => {
     if (activePeople.length === 0) return photos;
@@ -118,6 +143,7 @@ export default function YearbookView({
   );
 
   function onUploaded(newPhotos: Photo[]) {
+    // Demo path: append the freshly produced Photo[] to local state.
     setPhotos((prev) => [...prev, ...newPhotos]);
   }
 
@@ -251,6 +277,14 @@ export default function YearbookView({
                 title={s.title}
                 photos={s.items}
                 isAdmin={isAdmin}
+                onPhotoUpdate={(id, patch) => {
+                  optimisticUpdate(id, patch);
+                  void refreshPhotos();
+                }}
+                onPhotoDelete={(id) => {
+                  optimisticDelete(id);
+                  void refreshPhotos();
+                }}
               />
             ))
           )}
@@ -296,6 +330,9 @@ export default function YearbookView({
         people={people}
         demo={demo}
         onUploaded={onUploaded}
+        onCommit={() => {
+          void refreshPhotos();
+        }}
       />
 
       <AdminPanel

@@ -16,17 +16,23 @@ const VARIANT_CLASS: Record<Variant, string> = {
   hero: "col-span-2 md:col-span-6",
 };
 
+type SectionProps = {
+  id: string;
+  title: string;
+  photos: Photo[];
+  isAdmin?: boolean;
+  onPhotoUpdate?: (id: string, patch: Partial<Photo>) => void;
+  onPhotoDelete?: (id: string) => void;
+};
+
 export default function PhotoSection({
   id,
   title,
   photos,
   isAdmin = false,
-}: {
-  id: string;
-  title: string;
-  photos: Photo[];
-  isAdmin?: boolean;
-}) {
+  onPhotoUpdate,
+  onPhotoDelete,
+}: SectionProps) {
   const variants = useMemo<Map<string, Variant>>(() => {
     const map = new Map<string, Variant>();
     photos.forEach((p, i) => {
@@ -60,6 +66,8 @@ export default function PhotoSection({
             photo={p}
             variantClass={VARIANT_CLASS[variants.get(p.id) ?? "medium"]}
             isAdmin={isAdmin}
+            onUpdate={onPhotoUpdate}
+            onDelete={onPhotoDelete}
           />
         ))}
       </div>
@@ -71,10 +79,14 @@ function PhotoCard({
   photo,
   variantClass,
   isAdmin,
+  onUpdate,
+  onDelete,
 }: {
   photo: Photo;
   variantClass: string;
   isAdmin: boolean;
+  onUpdate?: (id: string, patch: Partial<Photo>) => void;
+  onDelete?: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const search = useSearchParams();
@@ -147,6 +159,8 @@ function PhotoCard({
             photo={photo}
             adminToken={adminToken}
             isHidden={isHidden}
+            onUpdate={onUpdate}
+            onDelete={onDelete}
           />
         )}
       </div>
@@ -160,10 +174,14 @@ function AdminControls({
   photo,
   adminToken,
   isHidden,
+  onUpdate,
+  onDelete,
 }: {
   photo: Photo;
   adminToken: string;
   isHidden: boolean;
+  onUpdate?: (id: string, patch: Partial<Photo>) => void;
+  onDelete?: (id: string) => void;
 }) {
   const [busy, setBusy] = useState<"hide" | "delete" | null>(null);
 
@@ -171,18 +189,17 @@ function AdminControls({
     e.stopPropagation();
     if (busy) return;
     setBusy("hide");
+    const next: Photo["status"] = isHidden ? "published" : "hidden";
     try {
-      await fetch(
+      const res = await fetch(
         `/api/photos/${photo.id}?admin=${encodeURIComponent(adminToken)}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            status: isHidden ? "published" : "hidden",
-          }),
+          body: JSON.stringify({ status: next }),
         },
       );
-      // Realtime will reflect the change.
+      if (res.ok) onUpdate?.(photo.id, { status: next });
     } finally {
       setBusy(null);
     }
@@ -194,10 +211,11 @@ function AdminControls({
     if (!confirm("Supprimer cette photo définitivement ?")) return;
     setBusy("delete");
     try {
-      await fetch(
+      const res = await fetch(
         `/api/photos/${photo.id}?admin=${encodeURIComponent(adminToken)}`,
         { method: "DELETE" },
       );
+      if (res.ok) onDelete?.(photo.id);
     } finally {
       setBusy(null);
     }

@@ -13,7 +13,10 @@ type Props = {
   onClose: () => void;
   people: Person[];
   demo?: boolean;
+  /** Demo-mode: inject the freshly produced photos straight into the parent. */
   onUploaded: (photos: Photo[]) => void;
+  /** Live-mode: ask the parent to refetch from the DB so the grid catches up. */
+  onCommit?: () => void;
 };
 
 type Pending = {
@@ -72,6 +75,7 @@ export default function UploadDialog({
   people,
   demo = false,
   onUploaded,
+  onCommit,
 }: Props) {
   const [items, setItems] = useState<Pending[]>([]);
   const [name, setName] = useState<string>(() =>
@@ -235,7 +239,9 @@ export default function UploadDialog({
           }),
         ),
       );
-      // Realtime will push the published photos back.
+      // Trigger an explicit refetch in the parent — Realtime alone is
+      // unreliable so we don't want to depend on it for the visible result.
+      onCommit?.();
     } else {
       const photos: Photo[] = done.map((i) => ({
         id: i.id,
