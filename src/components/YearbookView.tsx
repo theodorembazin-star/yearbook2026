@@ -7,6 +7,7 @@ import Aurora from "./Aurora";
 import Flashes from "./Flashes";
 import Hero from "./Hero";
 import { extractPalette, DEFAULT_PALETTE, HERO_PALETTE } from "@/lib/colors";
+import { YEARBOOK_SUBTITLE } from "@/lib/config";
 import type { Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
 import Timeline from "./Timeline";
@@ -201,6 +202,7 @@ export default function YearbookView({
 
       <Hero
         title={yearbook.title}
+        subtitle={YEARBOOK_SUBTITLE}
         onProgress={(p) => setOnHero(p < 0.5)}
       />
 

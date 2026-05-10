@@ -5,11 +5,12 @@ import { useEffect, useRef } from "react";
 
 type Props = {
   title: string;
+  subtitle?: string;
   /** 0 while the hero is in view, 1 once the visitor has scrolled past it. */
   onProgress?: (progress: number) => void;
 };
 
-export default function Hero({ title, onProgress }: Props) {
+export default function Hero({ title, subtitle, onProgress }: Props) {
   const ref = useRef<HTMLElement>(null);
 
   // Simple IntersectionObserver: when more than half of the hero is in view
@@ -40,6 +41,11 @@ export default function Hero({ title, onProgress }: Props) {
     >
       <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-white/70 md:text-7xl lg:text-8xl">
         {title}
+        {subtitle && (
+          <span className="mt-1 block text-left text-3xl font-semibold leading-tight md:text-5xl lg:text-6xl">
+            {subtitle}
+          </span>
+        )}
       </h1>
 
       <button
