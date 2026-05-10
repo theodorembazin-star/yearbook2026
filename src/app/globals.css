@@ -5,12 +5,14 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Inter:wght@400;500;600&family=Caveat:wght@500;700&display=swap");
 
 :root {
-  /* Base canvas: warm gold at the top, dusty blue at the bottom.
-     The aurora paints on top of this, so the gradient mostly shows
-     through the gaps between blurred blobs. */
-  --bg-top: #e8d8a8;
-  --bg-bottom: #94a8be;
-  --ink: #14181f;
+  /* Dark canvas: deep midnight gradient. The aurora paints on top
+     and the photos sit on this dark backdrop — like an open
+     yearbook printed on dark paper. */
+  --bg-top: #14223d;
+  --bg-bottom: #05080f;
+  /* Default text color on the dark canvas. */
+  --ink: #14181f; /* still dark — used inside light surfaces (dialogs) */
+  --paper: #f4ead4; /* light text on the dark canvas */
 }
 
 html {
@@ -24,7 +26,7 @@ html {
 }
 body {
   background: transparent;
-  color: var(--ink);
+  color: var(--paper);
   font-family: var(--font-inter, "Inter"), system-ui, sans-serif;
 }
 

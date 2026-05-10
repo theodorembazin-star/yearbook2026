@@ -224,7 +224,7 @@ export default function YearbookView({
 
           {people.length > 0 && (
             <div className="mb-6 mt-6 flex items-center gap-3">
-              <Filter className="h-4 w-4 text-ink/60" />
+              <Filter className="h-4 w-4 text-white/60" />
               <PeopleFilter
                 people={people}
                 active={activePeople}
@@ -261,7 +261,7 @@ export default function YearbookView({
           <button
             onClick={() => setAdminOpen(true)}
             aria-label="Membres"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-ink/10 bg-white/90 text-ink/70 shadow-sm backdrop-blur transition hover:bg-white hover:text-ink"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/80 shadow-sm backdrop-blur transition hover:bg-white/20 hover:text-white"
           >
             <Settings className="h-4 w-4" />
           </button>
@@ -269,7 +269,7 @@ export default function YearbookView({
         <button
           onClick={() => setUploadOpen(true)}
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border border-ink/10 bg-white/90 px-4 py-2 text-sm text-ink/80 shadow-sm backdrop-blur transition hover:bg-white hover:text-ink",
+            "inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/85 shadow-sm backdrop-blur transition hover:bg-white/20 hover:text-white",
           )}
         >
           <Plus className="h-4 w-4" />
@@ -308,7 +308,7 @@ function Stats({
 }) {
   if (photoCount === 0 && !demo && !isAdmin) return null;
   return (
-    <p className="float-in pb-2 text-xs text-ink/55">
+    <p className="float-in pb-2 text-xs text-white/55">
       {photoCount > 0 && (
         <>
           {photoCount} photo{photoCount > 1 ? "s" : ""} ·{" "}
@@ -320,7 +320,7 @@ function Stats({
           {photoCount > 0 ? " · " : ""}
           {demo && <span className="text-accent">démo</span>}
           {demo && isAdmin && " · "}
-          {isAdmin && <span className="text-ink/80">admin</span>}
+          {isAdmin && <span className="text-white/85">admin</span>}
         </>
       )}
     </p>
@@ -339,12 +339,12 @@ function EmptyState({
   onAdminClick: () => void;
 }) {
   return (
-    <div className="mt-16 rounded-3xl border-2 border-dashed border-ink/15 p-12 text-center">
+    <div className="mt-16 rounded-3xl border-2 border-dashed border-white/15 p-12 text-center">
       <div className="text-5xl">📷</div>
-      <h2 className="font-display mt-3 text-2xl font-semibold">
+      <h2 className="font-display mt-3 text-2xl font-semibold text-white">
         Pas encore de photo
       </h2>
-      <p className="mt-2 text-ink/60">
+      <p className="mt-2 text-white/60">
         Sois le premier à en déposer pour démarrer la frise.
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
@@ -357,7 +357,7 @@ function EmptyState({
         {isAdmin && !hasPeople && (
           <button
             onClick={onAdminClick}
-            className="rounded-full border border-ink/15 bg-white px-6 py-3 text-sm hover:border-ink/40"
+            className="rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm text-white hover:bg-white/15"
           >
             Configurer les membres
           </button>

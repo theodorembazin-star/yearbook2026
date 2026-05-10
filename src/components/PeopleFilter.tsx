@@ -18,7 +18,7 @@ export default function PeopleFilter({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm text-ink/60">Filtrer :</span>
+      <span className="text-sm text-white/60">Filtrer :</span>
       {people.map((p) => {
         const isActive = active.includes(p.id);
         return (
@@ -28,8 +28,8 @@ export default function PeopleFilter({
             className={cn(
               "rounded-full border px-3 py-1 text-sm transition",
               isActive
-                ? "border-ink bg-ink text-cream"
-                : "border-ink/15 bg-white/60 hover:border-ink/40",
+                ? "border-white bg-white text-ink"
+                : "border-white/20 bg-white/10 text-white/80 hover:bg-white/15",
             )}
           >
             {p.name}
@@ -39,7 +39,7 @@ export default function PeopleFilter({
       {active.length > 0 && (
         <button
           onClick={() => onChange([])}
-          className="ml-2 text-xs text-ink/50 underline hover:text-ink"
+          className="ml-2 text-xs text-white/50 underline hover:text-white"
         >
           réinitialiser
         </button>
