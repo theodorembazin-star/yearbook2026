@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Filter, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Aurora from "./Aurora";
+import Flashes from "./Flashes";
 import Hero from "./Hero";
 import { extractPalette, DEFAULT_PALETTE, HERO_PALETTE } from "@/lib/colors";
 import type { Person, Photo, Yearbook } from "@/lib/types";
@@ -196,6 +197,7 @@ export default function YearbookView({
   return (
     <div className="min-h-screen">
       <Aurora colors={onHero ? HERO_PALETTE : palette} fast={onHero} />
+      <Flashes colors={onHero ? HERO_PALETTE : palette} />
 
       <Hero
         title={yearbook.title}
