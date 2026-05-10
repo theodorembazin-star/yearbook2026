@@ -5,14 +5,22 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Inter:wght@400;500;600&family=Caveat:wght@500;700&display=swap");
 
 :root {
-  --bg: #f8f1e3;
-  --ink: #1a1410;
+  /* Base canvas: warm gold at the top, dusty blue at the bottom.
+     The aurora paints on top of this, so the gradient mostly shows
+     through the gaps between blurred blobs. */
+  --bg-top: #e8d8a8;
+  --bg-bottom: #94a8be;
+  --ink: #14181f;
 }
 
 html {
-  /* Base canvas color. Body stays transparent so the fixed Aurora
-     behind the content can paint on top of it. */
-  background: var(--bg);
+  background: linear-gradient(
+    180deg,
+    var(--bg-top) 0%,
+    var(--bg-bottom) 100%
+  );
+  background-attachment: fixed;
+  min-height: 100%;
 }
 body {
   background: transparent;

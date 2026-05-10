@@ -2,7 +2,14 @@
 // Lightweight: downsamples to 80x80, buckets pixels by quantized RGB,
 // and ranks buckets by vibrance × frequency. No external dependency.
 
-export const DEFAULT_PALETTE = ["#fbbf24", "#ec4899", "#c4451c", "#8b5cf6"];
+// Blue-gold default palette — used before any photo is uploaded and as a
+// fallback when color extraction fails (CORS, etc.).
+export const DEFAULT_PALETTE = [
+  "#e6c567", // warm gold
+  "#3d5a80", // deep blue
+  "#d4a017", // bronze
+  "#7a92ad", // muted blue
+];
 
 type Bucket = {
   count: number;
