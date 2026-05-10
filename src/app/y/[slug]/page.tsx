@@ -29,36 +29,53 @@ export default async function YearbookPage({
     );
   }
 
-  const supabase = await supabaseServer();
-  const { data: yb } = await supabase
-    .from("yearbooks")
-    .select("*")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!yb) notFound();
+  try {
+    const supabase = await supabaseServer();
+    const { data: yb, error: ybErr } = await supabase
+      .from("yearbooks")
+      .select("*")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (ybErr) throw ybErr;
+    if (!yb) notFound();
 
-  const [{ data: photos }, { data: people }] = await Promise.all([
-    supabase
-      .from("photos")
-      .select("*, contributors(display_name), photo_people(person_id)")
-      .eq("yearbook_id", yb.id)
-      .eq("status", "published")
-      .order("taken_at", { ascending: true }),
-    supabase.from("people").select("*").eq("yearbook_id", yb.id),
-  ]);
+    const [{ data: photos }, { data: people }] = await Promise.all([
+      supabase
+        .from("photos")
+        .select("*, contributors(display_name), photo_people(person_id)")
+        .eq("yearbook_id", yb.id)
+        .eq("status", "published")
+        .order("taken_at", { ascending: true }),
+      supabase.from("people").select("*").eq("yearbook_id", yb.id),
+    ]);
 
-  return (
-    <YearbookView
-      yearbook={{
-        id: yb.id,
-        slug: yb.slug,
-        title: yb.title,
-        cover_emoji: yb.cover_emoji,
-        created_at: yb.created_at,
-      }}
-      photos={(photos ?? []).map(photoFromRow as never)}
-      people={(people ?? []).map(personFromRow)}
-      token={token ?? null}
-    />
-  );
+    return (
+      <YearbookView
+        yearbook={{
+          id: yb.id,
+          slug: yb.slug,
+          title: yb.title,
+          cover_emoji: yb.cover_emoji,
+          created_at: yb.created_at,
+        }}
+        photos={(photos ?? []).map(photoFromRow as never)}
+        people={(people ?? []).map(personFromRow)}
+        token={token ?? null}
+      />
+    );
+  } catch (e) {
+    // Supabase unreachable or schema not yet applied — fall back to demo so
+    // the page never hard-crashes during the rollout.
+    console.warn("Falling back to demo dataset:", e);
+    const yearbook: Yearbook = { ...demoYearbook, slug };
+    return (
+      <YearbookView
+        yearbook={yearbook}
+        photos={demoPhotos}
+        people={demoPeople}
+        token={null}
+        demo
+      />
+    );
+  }
 }
