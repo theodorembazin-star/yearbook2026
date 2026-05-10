@@ -4,7 +4,7 @@
 // pointer-events: none + a high z-index — dialogs and the main canvas
 // inherit the texture.
 
-const GRAIN_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 320 320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.55' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`;
+const GRAIN_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`;
 
 const DATA_URL = `url("data:image/svg+xml;utf8,${encodeURIComponent(GRAIN_SVG)}")`;
 
@@ -16,8 +16,8 @@ export default function Grain() {
       style={{
         backgroundImage: DATA_URL,
         backgroundRepeat: "repeat",
-        // Larger tile = bigger visible grain points.
-        backgroundSize: "520px 520px",
+        // Tighter tile = finer visible grain points.
+        backgroundSize: "200px 200px",
       }}
     />
   );
