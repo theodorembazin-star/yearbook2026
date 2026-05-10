@@ -83,8 +83,19 @@ export default function Timeline({ sections }: { sections: Section[] }) {
                     <li key={s.key}>
                       <a
                         href={`#s-${s.key}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document
+                            .getElementById(`s-${s.key}`)
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                          // Update the URL hash without jumping.
+                          history.replaceState(null, "", `#s-${s.key}`);
+                        }}
                         className={cn(
-                          "block py-1 tracking-tight capitalize transition-all duration-300 hover:text-white",
+                          "block py-1 tracking-tight capitalize transition-all duration-300 hover:text-white/70",
                           size,
                           tone,
                         )}
