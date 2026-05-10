@@ -5,7 +5,6 @@ import { Plus, Filter, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Aurora from "./Aurora";
 import Hero from "./Hero";
-import Intro from "./Intro";
 import { extractPalette, DEFAULT_PALETTE, HERO_PALETTE } from "@/lib/colors";
 import { YEARBOOK_SUBTITLE } from "@/lib/config";
 import type { Person, Photo, Yearbook } from "@/lib/types";
@@ -198,8 +197,6 @@ export default function YearbookView({
   return (
     <div className="min-h-screen">
       <Aurora colors={onHero ? HERO_PALETTE : palette} fast={onHero} />
-
-      <Intro title={yearbook.title} subtitle={YEARBOOK_SUBTITLE} />
 
       <Hero
         title={yearbook.title}
