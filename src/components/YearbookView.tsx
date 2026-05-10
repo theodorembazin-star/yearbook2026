@@ -328,7 +328,7 @@ export default function YearbookView({
         {/* Info popover — anchored above the icon button */}
         <div className="relative" data-info-root>
           {infoOpen && (
-            <div className="absolute bottom-full right-0 mb-3 w-72 rounded-2xl border border-white/10 bg-[#0d1422]/90 p-4 text-sm text-white/75 shadow-2xl backdrop-blur-2xl">
+            <div className="absolute bottom-full right-0 mb-3 w-80 rounded-2xl border border-white/10 bg-[#0d1422]/90 p-5 shadow-2xl backdrop-blur-2xl">
               <button
                 type="button"
                 onClick={() => setInfoOpen(false)}
@@ -337,11 +337,16 @@ export default function YearbookView({
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              <p className="pr-4">
-                Photos qui résument un moment marquant partagé par plusieurs
-                membres. Le contenu est en accès libre — pas d'image sans le
-                consentement des personnes visibles. Outil réservé à la prépa
-                de l'Essouriau.
+              <p className="font-display text-base leading-snug text-white/85 pr-5">
+                Des photos qui résument un moment marquant partagé par
+                plusieurs membres.
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-white/65">
+                Le contenu est en accès libre — pas d'image sans le
+                consentement des personnes visibles.
+              </p>
+              <p className="mt-4 text-[10px] uppercase tracking-[0.22em] text-white/40">
+                Réservé à la prépa de l'Essouriau
               </p>
             </div>
           )}
