@@ -254,9 +254,18 @@ export default function YearbookView({
       </div>
 
       {/* Discreet floating actions bottom-right.
+          - Hidden while the welcome screen is in view; slides up from
+            below once the visitor crosses into the yearbook.
           - Upload: small pill, neutral colors
           - Admin (only when authenticated): icon-only gear */}
-      <div className="fixed bottom-6 right-6 z-30 flex items-center gap-2">
+      <div
+        className={cn(
+          "fixed bottom-6 right-6 z-30 flex items-center gap-2 transition-all duration-500 ease-out",
+          onHero
+            ? "pointer-events-none translate-y-32 opacity-0"
+            : "translate-y-0 opacity-100",
+        )}
+      >
         {isAdmin && (
           <button
             onClick={() => setAdminOpen(true)}
