@@ -159,24 +159,6 @@ body {
   transition-duration: 0.4s;
 }
 
-/* Discreet random flashes in the background — short pulses of color
-   sampled from the current aurora palette. */
-@keyframes flash-pulse {
-  0%,
-  92% {
-    opacity: 0;
-    transform: scale(0.7);
-  }
-  96% {
-    opacity: var(--peak, 0.5);
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.04);
-  }
-}
-
 /* Frosted glass for cards/dialogs that sit above the aurora */
 .glass {
   background: rgba(250, 246, 239, 0.55);
