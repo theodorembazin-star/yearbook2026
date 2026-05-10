@@ -34,7 +34,7 @@ function svgPhoto(emoji: string, from: string, to: string, label: string) {
 
 const photo = (emoji: string, from: string, to: string, label: string) => {
   const url = svgPhoto(emoji, from, to, label);
-  return { url, thumb_url: url };
+  return { url, thumb_url: url, kind: "image" as const };
 };
 
 export const demoPhotos: Photo[] = [

@@ -85,6 +85,7 @@ function PhotoCard({
   // Fall back to 3:2 if width/height are missing.
   const w = photo.width || 1200;
   const h = photo.height || 800;
+  const isVideo = photo.kind === "video";
 
   return (
     <>
@@ -98,13 +99,26 @@ function PhotoCard({
         )}
         style={{ aspectRatio: `${w} / ${h}` }}
       >
-        <Image
-          src={photo.thumb_url}
-          alt={photo.caption ?? "Photo"}
-          fill
-          sizes="(max-width: 768px) 100vw, 50vw"
-          className="object-cover transition duration-500 group-hover:scale-[1.02]"
-        />
+        {isVideo ? (
+          // Silent autoplay loop, no controls — clicking opens the lightbox.
+          <video
+            src={photo.url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <Image
+            src={photo.thumb_url}
+            alt={photo.caption ?? "Photo"}
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="object-cover transition duration-500 group-hover:scale-[1.02]"
+          />
+        )}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent p-4 text-left opacity-0 transition group-hover:opacity-100">
           {photo.caption && (
             <p className="font-hand text-lg text-white/70">{photo.caption}</p>
@@ -121,6 +135,7 @@ function PhotoCard({
 }
 
 function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
+  const isVideo = photo.kind === "video";
   return (
     <div
       onClick={onClose}
@@ -130,13 +145,23 @@ function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         className="relative max-h-full max-w-5xl"
       >
-        <Image
-          src={photo.url}
-          alt={photo.caption ?? ""}
-          width={photo.width || 1200}
-          height={photo.height || 800}
-          className="max-h-[80vh] w-auto rounded-xl object-contain"
-        />
+        {isVideo ? (
+          <video
+            src={photo.url}
+            controls
+            autoPlay
+            playsInline
+            className="max-h-[80vh] w-auto rounded-xl"
+          />
+        ) : (
+          <Image
+            src={photo.url}
+            alt={photo.caption ?? ""}
+            width={photo.width || 1200}
+            height={photo.height || 800}
+            className="max-h-[80vh] w-auto rounded-xl object-contain"
+          />
+        )}
         <div className="mt-3 text-center text-cream">
           {photo.caption && <p className="font-hand text-2xl">{photo.caption}</p>}
           <p className="mt-1 text-sm text-cream/70">

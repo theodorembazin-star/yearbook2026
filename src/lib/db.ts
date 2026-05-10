@@ -6,6 +6,7 @@ import type { Database } from "./supabase/types";
 
 type DBPhoto = Database["public"]["Tables"]["photos"]["Row"] & {
   uploader_name?: string | null;
+  media_type?: "image" | "video" | null;
   contributors: { display_name: string } | null;
   photo_people: { person_id: string }[] | null;
 };
@@ -34,6 +35,7 @@ export function photoFromRow(row: DBPhoto): Photo {
     caption: row.caption ?? undefined,
     people_ids: (row.photo_people ?? []).map((p) => p.person_id),
     status: row.status,
+    kind: row.media_type === "video" ? "video" : "image",
   };
 }
 

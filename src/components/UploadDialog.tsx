@@ -23,6 +23,7 @@ type Pending = {
   takenAt: string | null;
   width?: number;
   height?: number;
+  kind: "image" | "video";
   status: "queued" | "processing" | "uploading" | "done" | "error";
   progress: number;
   remoteId?: string;
@@ -45,6 +46,26 @@ function readImageSize(blob: Blob): Promise<{ width: number; height: number }> {
   });
 }
 
+function readVideoSize(blob: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    video.onloadedmetadata = () => {
+      const out = { width: video.videoWidth, height: video.videoHeight };
+      URL.revokeObjectURL(url);
+      resolve(out);
+    };
+    video.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    video.src = url;
+  });
+}
+
 export default function UploadDialog({
   open,
   onClose,
@@ -64,12 +85,15 @@ export default function UploadDialog({
 
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
-      const arr = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      const arr = Array.from(files).filter(
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/"),
+      );
       const next: Pending[] = arr.map((file) => ({
         id: nanoid(),
         file,
         preview: URL.createObjectURL(file),
         takenAt: null,
+        kind: file.type.startsWith("video/") ? "video" : "image",
         status: "queued",
         progress: 0,
       }));
@@ -80,35 +104,62 @@ export default function UploadDialog({
           prev.map((p) => (p.id === item.id ? { ...p, status: "processing" } : p)),
         );
         try {
-          const [{ default: exifr }, { default: imageCompression }] = await Promise.all([
-            import("exifr"),
-            import("browser-image-compression"),
-          ]);
-          const exif = await exifr.parse(item.file).catch(() => null);
-          const takenAt = exif?.DateTimeOriginal
-            ? new Date(exif.DateTimeOriginal).toISOString()
-            : new Date(item.file.lastModified).toISOString();
+          const isVideo = item.kind === "video";
+          let payload: Blob = item.file;
+          let takenAt: string;
+          let width = 0;
+          let height = 0;
 
-          const compressed = await imageCompression(item.file, {
-            maxSizeMB: 1.5,
-            maxWidthOrHeight: 1600,
-            useWebWorker: true,
-            onProgress: (pct: number) => {
-              setItems((prev) =>
-                prev.map((p) => (p.id === item.id ? { ...p, progress: pct } : p)),
-              );
-            },
-          });
+          if (isVideo) {
+            // No EXIF and no client-side compression for videos in v1.
+            // Use the file's lastModified as the closest signal we have
+            // for the capture date.
+            takenAt = new Date(item.file.lastModified).toISOString();
+            const size = await readVideoSize(item.file).catch(() => ({
+              width: 0,
+              height: 0,
+            }));
+            width = size.width;
+            height = size.height;
+            setItems((prev) =>
+              prev.map((p) =>
+                p.id === item.id ? { ...p, progress: 100, width, height } : p,
+              ),
+            );
+          } else {
+            const [{ default: exifr }, { default: imageCompression }] =
+              await Promise.all([
+                import("exifr"),
+                import("browser-image-compression"),
+              ]);
+            const exif = await exifr.parse(item.file).catch(() => null);
+            takenAt = exif?.DateTimeOriginal
+              ? new Date(exif.DateTimeOriginal).toISOString()
+              : new Date(item.file.lastModified).toISOString();
 
-          // Read actual dimensions from the compressed bytes
-          const { width, height } = await readImageSize(compressed).catch(
-            () => ({ width: 0, height: 0 }),
-          );
-          setItems((prev) =>
-            prev.map((p) =>
-              p.id === item.id ? { ...p, width, height } : p,
-            ),
-          );
+            const compressed = await imageCompression(item.file, {
+              maxSizeMB: 1.5,
+              maxWidthOrHeight: 1600,
+              useWebWorker: true,
+              onProgress: (pct: number) => {
+                setItems((prev) =>
+                  prev.map((p) => (p.id === item.id ? { ...p, progress: pct } : p)),
+                );
+              },
+            });
+            payload = compressed;
+            const size = await readImageSize(compressed).catch(() => ({
+              width: 0,
+              height: 0,
+            }));
+            width = size.width;
+            height = size.height;
+            setItems((prev) =>
+              prev.map((p) =>
+                p.id === item.id ? { ...p, width, height } : p,
+              ),
+            );
+          }
 
           if (live) {
             setItems((prev) =>
@@ -117,7 +168,7 @@ export default function UploadDialog({
             const signRes = await fetch("/api/photos/upload-url", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ contentType: compressed.type, takenAt }),
+              body: JSON.stringify({ contentType: payload.type, takenAt }),
             });
             if (!signRes.ok) {
               const j = await signRes.json().catch(() => ({}));
@@ -130,7 +181,7 @@ export default function UploadDialog({
             const supabase = supabaseBrowser();
             const { error } = await supabase.storage
               .from("photos")
-              .uploadToSignedUrl(key, token, compressed);
+              .uploadToSignedUrl(key, token, payload);
             if (error) throw error;
 
             setItems((prev) =>
@@ -191,14 +242,15 @@ export default function UploadDialog({
         yearbook_id: YEARBOOK_ID,
         url: i.preview,
         thumb_url: i.preview,
-        width: 1200,
-        height: 800,
+        width: i.width || 1200,
+        height: i.height || 800,
         taken_at: i.takenAt ?? new Date().toISOString(),
         uploaded_at: new Date().toISOString(),
         uploader_id: "local",
         uploader_name: name.trim(),
         people_ids: tagged,
         status: "published",
+        kind: i.kind,
       }));
       onUploaded(photos);
     }
@@ -278,14 +330,14 @@ export default function UploadDialog({
             Choisir des fichiers
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
               hidden
               onChange={(e) => e.target.files && addFiles(e.target.files)}
             />
           </label>
           <p className="mt-2 text-xs text-white/35">
-            Date de prise de vue lue automatiquement (EXIF) · compression côté navigateur
+            Photos et vidéos. Date de prise lue automatiquement (EXIF), compression côté navigateur pour les images.
           </p>
         </div>
 
@@ -296,10 +348,30 @@ export default function UploadDialog({
                 key={i.id}
                 className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={i.preview} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                {i.kind === "video" ? (
+                  <video
+                    src={i.preview}
+                    muted
+                    playsInline
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={i.preview}
+                    alt=""
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                )}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white/80">{i.file.name}</div>
+                  <div className="truncate text-sm text-white/80">
+                    {i.file.name}
+                    {i.kind === "video" && (
+                      <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/55">
+                        vidéo
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-white/45">
                     {i.takenAt
                       ? new Date(i.takenAt).toLocaleDateString("fr-FR")

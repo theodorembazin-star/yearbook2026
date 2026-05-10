@@ -4,7 +4,7 @@ import { supabaseAdmin, isServerConfigured } from "@/lib/supabase/server";
 import { YEARBOOK_ID } from "@/lib/config";
 
 const Body = z.object({
-  contentType: z.string().regex(/^image\//),
+  contentType: z.string().regex(/^(image|video)\//),
   takenAt: z.string().datetime().optional(),
   caption: z.string().max(280).optional(),
 });
@@ -20,7 +20,11 @@ export async function POST(req: Request) {
 
   const supabase = supabaseAdmin();
   const photoId = crypto.randomUUID();
-  const ext = parsed.data.contentType.split("/")[1] ?? "jpg";
+  const isVideo = parsed.data.contentType.startsWith("video/");
+  // Take whatever is after the slash, strip codec hints (e.g. "mp4; codecs=…")
+  const ext = (parsed.data.contentType.split("/")[1] ?? (isVideo ? "mp4" : "jpg"))
+    .split(";")[0]
+    .trim();
   const key = `${YEARBOOK_ID}/${photoId}.${ext}`;
 
   const { data: signed, error: signErr } = await supabase.storage
@@ -41,6 +45,7 @@ export async function POST(req: Request) {
     taken_at: parsed.data.takenAt ?? new Date().toISOString(),
     caption: parsed.data.caption,
     status: "pending",
+    media_type: isVideo ? "video" : "image",
   });
   if (insertErr) {
     console.error("upload-url: insert failed", insertErr);

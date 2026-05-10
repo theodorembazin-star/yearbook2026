@@ -35,6 +35,7 @@ export type Photo = {
   caption?: string;
   people_ids: string[]; // assigned person clusters
   status: "pending" | "published" | "hidden";
+  kind: "image" | "video";
 };
 
 export type LayoutBlock = {
