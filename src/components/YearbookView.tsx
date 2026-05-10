@@ -346,7 +346,8 @@ export default function YearbookView({
                 consentement des personnes visibles.
               </p>
               <p className="mt-4 text-[10px] uppercase tracking-[0.22em] text-white/40">
-                Réservé aux 2e année de la prépa de l'Essouriau
+                Réservé aux 2e année de la prépa de l'Essouriau et à leurs
+                professeurs
               </p>
             </div>
           )}
