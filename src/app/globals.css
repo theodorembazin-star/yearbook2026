@@ -54,6 +54,16 @@ body {
    background. Apple-Music-Now-Playing vibe.
    ============================================================ */
 
+/* Wrapper that handles the per-palette displacement. The blob inside keeps
+   its own continuous drift animation, so the two transforms compose:
+   `wrapper translate (one-shot, smooth)` ∘ `blob keyframe drift (continuous)`. */
+.aurora-shift {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+  transition: transform 1.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .aurora-blob {
   position: absolute;
   width: 55vmax;
@@ -63,7 +73,7 @@ body {
   opacity: 0.65;
   will-change: transform, background-color;
   /* Smooth tween when the palette changes (scroll-driven from photos). */
-  transition: background 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 1.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .aurora-blob-1 { top: -15%; left: -10%; }
