@@ -5,6 +5,17 @@ import { useMemo, useState } from "react";
 import type { Photo } from "@/lib/types";
 import { cn, formatDateFr } from "@/lib/utils";
 
+type Variant = "small" | "medium" | "large" | "hero";
+
+// Tailwind needs the literal class names at build time, so we map variants to
+// strings rather than building them dynamically.
+const VARIANT_CLASS: Record<Variant, string> = {
+  small: "col-span-1 md:col-span-2",
+  medium: "col-span-2 md:col-span-3",
+  large: "col-span-2 md:col-span-4",
+  hero: "col-span-2 md:col-span-6",
+};
+
 export default function PhotoSection({
   id,
   title,
@@ -14,21 +25,23 @@ export default function PhotoSection({
   title: string;
   photos: Photo[];
 }) {
-  // Decide which photos get the "hero" treatment (full-width, spans columns).
-  // Heroes break the rhythm of the masonry: a wide landscape, then back to a
-  // 2-3 column flow. Stable per (photoId, index) so it doesn't shuffle on
-  // re-render.
-  const heroIds = useMemo(() => {
-    const set = new Set<string>();
+  // Decide each photo's size: ratio-driven, with small randomization based on
+  // the photo id (so it's stable across re-renders, and varied between photos
+  // even with the same ratio).
+  const variants = useMemo<Map<string, Variant>>(() => {
+    const map = new Map<string, Variant>();
     photos.forEach((p, i) => {
       const ratio = (p.width || 1200) / (p.height || 800);
-      // Always promote very wide photos.
-      if (ratio > 1.9) set.add(p.id);
-      // Otherwise, every ~5th landscape becomes a hero, but skip the first
-      // photo of a section (heading should breathe).
-      else if (i > 0 && i % 5 === 0 && ratio > 1.3) set.add(p.id);
+      let v: Variant;
+      if (ratio > 1.85) v = "hero";
+      else if (ratio > 1.4) v = i % 3 === 0 ? "large" : "medium";
+      else if (ratio > 0.9) v = i % 4 === 0 ? "large" : "medium";
+      else v = i % 5 === 0 ? "medium" : "small";
+      // Promote one photo every ~7 to add a hero break, regardless of ratio.
+      if (i > 0 && i % 7 === 0 && v !== "hero" && ratio > 1.1) v = "hero";
+      map.set(p.id, v);
     });
-    return set;
+    return map;
   }, [photos]);
 
   return (
@@ -47,19 +60,31 @@ export default function PhotoSection({
         </span>
       </div>
 
-      {/* Multi-column masonry. Heroes interrupt the columns by spanning all
-          of them, creating visual rhythm. Each card respects its own
-          aspect ratio to keep the photos honest. */}
-      <div className="columns-1 gap-4 md:columns-2 xl:columns-3">
+      {/* 6-column grid on desktop, 2 cols on mobile. Items take 2/3/4/6 cols
+          depending on their aspect ratio + a touch of variation, so the page
+          doesn't read as a uniform 3-up. `items-start` keeps each photo at
+          its natural height (no vertical stretching). `grid-auto-flow: dense`
+          lets the engine reshuffle small items into earlier gaps. */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-6 [grid-auto-flow:dense] items-start">
         {photos.map((p) => (
-          <PhotoCard key={p.id} photo={p} isHero={heroIds.has(p.id)} />
+          <PhotoCard
+            key={p.id}
+            photo={p}
+            variantClass={VARIANT_CLASS[variants.get(p.id) ?? "medium"]}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function PhotoCard({ photo, isHero }: { photo: Photo; isHero: boolean }) {
+function PhotoCard({
+  photo,
+  variantClass,
+}: {
+  photo: Photo;
+  variantClass: string;
+}) {
   const [open, setOpen] = useState(false);
 
   // Fall back to 3:2 if width/height are missing.
@@ -73,8 +98,8 @@ function PhotoCard({ photo, isHero }: { photo: Photo; isHero: boolean }) {
         data-photo-id={photo.id}
         data-thumb-url={photo.thumb_url}
         className={cn(
-          "group relative mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl",
-          isHero && "[column-span:all]",
+          "group relative block w-full overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl",
+          variantClass,
         )}
         style={{ aspectRatio: `${w} / ${h}` }}
       >
@@ -82,11 +107,7 @@ function PhotoCard({ photo, isHero }: { photo: Photo; isHero: boolean }) {
           src={photo.thumb_url}
           alt={photo.caption ?? "Photo"}
           fill
-          sizes={
-            isHero
-              ? "(max-width: 768px) 100vw, 1200px"
-              : "(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-          }
+          sizes="(max-width: 768px) 100vw, 50vw"
           className="object-cover transition duration-500 group-hover:scale-[1.02]"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent p-4 text-left opacity-0 transition group-hover:opacity-100">
