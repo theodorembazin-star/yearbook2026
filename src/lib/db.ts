@@ -1,4 +1,6 @@
-// Maps a Supabase row to the UI Photo type, building public URLs from R2 keys.
+// Maps a Supabase row to the UI Photo type. Files live in the public 'photos'
+// bucket of Supabase Storage; URLs follow the standard public path:
+//   {SUPABASE_URL}/storage/v1/object/public/photos/{key}
 import type { Photo, Person } from "./types";
 import type { Database } from "./supabase/types";
 
@@ -7,14 +9,18 @@ type DBPhoto = Database["public"]["Tables"]["photos"]["Row"] & {
   photo_people: { person_id: string }[] | null;
 };
 
-const PUBLIC_BASE = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE ?? "";
+function publicUrl(key: string): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return "";
+  return `${base}/storage/v1/object/public/photos/${key}`;
+}
 
 export function photoFromRow(row: DBPhoto): Photo {
   return {
     id: row.id,
     yearbook_id: row.yearbook_id,
-    url: `${PUBLIC_BASE}/${row.r2_key}`,
-    thumb_url: row.thumb_key ? `${PUBLIC_BASE}/${row.thumb_key}` : `${PUBLIC_BASE}/${row.r2_key}`,
+    url: publicUrl(row.r2_key),
+    thumb_url: publicUrl(row.thumb_key ?? row.r2_key),
     width: row.width ?? 1200,
     height: row.height ?? 800,
     taken_at: row.taken_at,
