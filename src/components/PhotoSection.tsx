@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
+import { Download, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
 import type { Photo } from "@/lib/types";
 import { cn, formatDateFr } from "@/lib/utils";
 
@@ -259,6 +259,40 @@ function AdminControls({
 
 function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
   const isVideo = photo.kind === "video";
+  const [downloading, setDownloading] = useState(false);
+
+  async function download(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(photo.url);
+      if (!res.ok) throw new Error(`download_failed: ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      // Sniff a sensible extension from the URL/blob type.
+      const fromUrl = photo.url.split("?")[0].split(".").pop()?.toLowerCase();
+      const fromMime = (blob.type || "").split("/")[1]?.split(";")[0];
+      const ext =
+        (fromUrl && fromUrl.length <= 4 ? fromUrl : fromMime) ??
+        (isVideo ? "mp4" : "jpg");
+      const safeName = (photo.uploader_name || "yearbook")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${safeName}-${photo.id.slice(0, 8)}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div
       onClick={onClose}
@@ -285,11 +319,28 @@ function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
             className="max-h-[80vh] w-auto rounded-xl object-contain"
           />
         )}
-        <div className="mt-3 text-center text-cream">
-          {photo.caption && <p className="font-hand text-2xl">{photo.caption}</p>}
-          <p className="mt-1 text-sm text-cream/70">
-            {formatDateFr(photo.taken_at)} · par {photo.uploader_name}
-          </p>
+        <div className="mt-3 flex flex-col items-center gap-3 text-cream sm:flex-row sm:justify-between">
+          <div className="text-center sm:text-left">
+            {photo.caption && (
+              <p className="font-hand text-2xl">{photo.caption}</p>
+            )}
+            <p className="mt-1 text-sm text-cream/70">
+              {formatDateFr(photo.taken_at)} · par {photo.uploader_name}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={download}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-white/20 hover:text-white disabled:opacity-50"
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Télécharger
+          </button>
         </div>
       </div>
     </div>
