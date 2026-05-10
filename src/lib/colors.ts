@@ -11,13 +11,13 @@ export const DEFAULT_PALETTE = [
   "#7a92ad", // muted blue
 ];
 
-// Hero-only palette: deep navy + forest greens. Used while the user is on
-// the welcome screen, before they commit to scrolling into the yearbook.
+// Hero-only palette: deep navy + cyans. Used while the user is on the
+// welcome screen, before they commit to scrolling into the yearbook.
 export const HERO_PALETTE = [
   "#0f2a44", // deep navy
-  "#1f4d3a", // forest green
+  "#0e7490", // dark cyan
   "#1a3d63", // muted dark blue
-  "#3a6b52", // sage green
+  "#0891b2", // cyan
 ];
 
 type Bucket = {
