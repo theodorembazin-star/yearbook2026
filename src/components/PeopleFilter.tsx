@@ -28,7 +28,7 @@ export default function PeopleFilter({
             className={cn(
               "rounded-full border px-3 py-1 text-sm transition",
               isActive
-                ? "border-white bg-white text-ink"
+                ? "border-white bg-white text-ink/90"
                 : "border-white/20 bg-white/10 text-white/80 hover:bg-white/15",
             )}
           >

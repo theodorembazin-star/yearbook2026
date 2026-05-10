@@ -54,7 +54,7 @@ export default function Timeline({ sections }: { sections: Section[] }) {
               <div
                 className={cn(
                   "mb-3 font-display text-sm font-semibold uppercase tracking-[0.22em] transition-colors duration-300",
-                  isActiveYear ? "text-white" : "text-white/40",
+                  isActiveYear ? "text-white/90" : "text-white/40",
                 )}
               >
                 {formatSchoolYear(g.year)}
@@ -73,12 +73,12 @@ export default function Timeline({ sections }: { sections: Section[] }) {
                           : "text-base";
                   const tone =
                     distance === 0
-                      ? "text-white"
+                      ? "text-white/90"
                       : distance === 1
-                        ? "text-white/70"
+                        ? "text-white/65"
                         : distance === 2
-                          ? "text-white/45"
-                          : "text-white/30";
+                          ? "text-white/42"
+                          : "text-white/28";
                   return (
                     <li key={s.key}>
                       <a
