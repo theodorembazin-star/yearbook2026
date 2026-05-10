@@ -16,8 +16,8 @@ export default function Grain() {
       style={{
         backgroundImage: DATA_URL,
         backgroundRepeat: "repeat",
-        // Tighter tile = finer visible grain points.
-        backgroundSize: "200px 200px",
+        // Tile size scales the visible grain.
+        backgroundSize: "600px 600px",
       }}
     />
   );
