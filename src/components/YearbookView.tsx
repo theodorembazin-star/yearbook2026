@@ -339,14 +339,9 @@ export default function YearbookView({
               </button>
               <p className="pr-4">
                 Photos qui résument un moment marquant partagé par plusieurs
-                membres.
-              </p>
-              <p className="mt-2 pr-4">
-                Le contenu est en accès libre — pas d'image sans le
-                consentement des personnes visibles.
-              </p>
-              <p className="mt-3 text-xs text-white/50">
-                Outil réservé à la prépa de l'Essouriau.
+                membres. Le contenu est en accès libre — pas d'image sans le
+                consentement des personnes visibles. Outil réservé à la prépa
+                de l'Essouriau.
               </p>
             </div>
           )}
