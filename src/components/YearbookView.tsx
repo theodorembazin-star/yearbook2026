@@ -325,10 +325,11 @@ export default function YearbookView({
             : "translate-y-0 opacity-100",
         )}
       >
-        {/* Info popover — anchored above the icon button */}
-        <div className="relative" data-info-root>
+        {/* Info popover — fixed-anchored to the bottom-right corner of the
+            viewport so it never overflows on narrow screens. */}
+        <div data-info-root>
           {infoOpen && (
-            <div className="absolute bottom-full right-0 mb-3 w-80 rounded-2xl border border-white/10 bg-[#0d1422]/90 p-5 shadow-2xl backdrop-blur-2xl">
+            <div className="fixed bottom-20 right-4 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[#0d1422]/90 p-5 shadow-2xl backdrop-blur-2xl">
               <button
                 type="button"
                 onClick={() => setInfoOpen(false)}
