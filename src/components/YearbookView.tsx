@@ -18,16 +18,6 @@ import AdminPanel from "./AdminPanel";
 import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
 import { photoFromRow, eventFromRow } from "@/lib/db";
 import { YEARBOOK_ID } from "@/lib/config";
-import {
-  DndContext,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 
 type Props = {
   yearbook: Yearbook;
@@ -321,33 +311,26 @@ export default function YearbookView({
     [openEventId, events],
   );
 
-  // ---------- Drag & drop reorder (across all sections) ----------
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 220, tolerance: 8 },
-    }),
-  );
+  // ---------- Reorder by up/down arrows (across all sections) ----------
+  // Move the orphan photo `id` by `direction` (-1 = up, +1 = down) in the
+  // flat order. Recomputes a new sort_at by inserting between its new
+  // neighbours; one PATCH; optimistic update for instant feedback.
+  function moveOrphan(id: string, direction: -1 | 1) {
+    const idx = orphanIds.indexOf(id);
+    if (idx < 0) return;
+    const target = idx + direction;
+    if (target < 0 || target >= orphanIds.length) return;
 
-  function handleDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const oldIdx = orphanIds.indexOf(String(active.id));
-    const newIdx = orphanIds.indexOf(String(over.id));
-    if (oldIdx < 0 || newIdx < 0) return;
-
-    // Build the post-move list to read its neighbors and compute a new sort_at.
     const next = orphanIds.slice();
-    next.splice(oldIdx, 1);
-    next.splice(newIdx, 0, String(active.id));
-    const findSort = (id: string) => {
-      const p = photos.find((x) => x.id === id);
+    next.splice(idx, 1);
+    next.splice(target, 0, id);
+
+    const findSort = (pid: string) => {
+      const p = photos.find((x) => x.id === pid);
       return p ? (p.sort_at ?? p.taken_at) : null;
     };
-    const prevId = next[newIdx - 1] ?? null;
-    const nextId = next[newIdx + 1] ?? null;
+    const prevId = next[target - 1] ?? null;
+    const nextId = next[target + 1] ?? null;
     const prevSort = prevId ? findSort(prevId) : null;
     const nextSort = nextId ? findSort(nextId) : null;
 
@@ -355,16 +338,16 @@ export default function YearbookView({
     if (prevSort && nextSort) {
       newMs = (new Date(prevSort).getTime() + new Date(nextSort).getTime()) / 2;
     } else if (prevSort) {
-      newMs = new Date(prevSort).getTime() + 60 * 1000; // +1 min after last
+      newMs = new Date(prevSort).getTime() + 60 * 1000;
     } else if (nextSort) {
-      newMs = new Date(nextSort).getTime() - 60 * 1000; // -1 min before first
+      newMs = new Date(nextSort).getTime() - 60 * 1000;
     } else {
       newMs = Date.now();
     }
     const newSort = new Date(newMs).toISOString();
 
-    optimisticUpdate(String(active.id), { sort_at: newSort });
-    void fetch(`/api/photos/${active.id}`, {
+    optimisticUpdate(id, { sort_at: newSort });
+    void fetch(`/api/photos/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sortAt: newSort }),
@@ -416,32 +399,26 @@ export default function YearbookView({
               onAdminClick={() => setAdminOpen(true)}
             />
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={orphanIds} strategy={rectSortingStrategy}>
-                {sections.map((s) => (
-                  <PhotoSection
-                    key={s.key}
-                    id={`s-${s.key}`}
-                    title={s.title}
-                    items={s.items}
-                    isAdmin={isAdmin}
-                    onOpenEvent={(id) => setOpenEventId(id)}
-                    onPhotoUpdate={(id, patch) => {
-                      optimisticUpdate(id, patch);
-                      void refreshPhotos();
-                    }}
-                    onPhotoDelete={(id) => {
-                      optimisticDelete(id);
-                      void refreshPhotos();
-                    }}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
+            sections.map((s) => (
+              <PhotoSection
+                key={s.key}
+                id={`s-${s.key}`}
+                title={s.title}
+                items={s.items}
+                isAdmin={isAdmin}
+                orphanIds={orphanIds}
+                onMovePhoto={moveOrphan}
+                onOpenEvent={(id) => setOpenEventId(id)}
+                onPhotoUpdate={(id, patch) => {
+                  optimisticUpdate(id, patch);
+                  void refreshPhotos();
+                }}
+                onPhotoDelete={(id) => {
+                  optimisticDelete(id);
+                  void refreshPhotos();
+                }}
+              />
+            ))
           )}
         </main>
       </div>

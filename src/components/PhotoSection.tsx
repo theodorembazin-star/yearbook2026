@@ -1,10 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   Download,
   Eye,
   EyeOff,
@@ -16,8 +18,6 @@ import {
 } from "lucide-react";
 import type { Event, Photo } from "@/lib/types";
 import { cn, formatDateFr } from "@/lib/utils";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 type Variant = "small" | "medium" | "large" | "hero";
 
@@ -40,6 +40,10 @@ type SectionProps = {
   title: string;
   items: TimelineItem[];
   isAdmin?: boolean;
+  /** Flat ordered list of orphan photo IDs, used to enable/disable
+   *  the up/down arrows on the first/last photo. */
+  orphanIds?: string[];
+  onMovePhoto?: (id: string, direction: -1 | 1) => void;
   onOpenEvent?: (id: string) => void;
   onPhotoUpdate?: (id: string, patch: Partial<Photo>) => void;
   onPhotoDelete?: (id: string) => void;
@@ -50,6 +54,8 @@ export default function PhotoSection({
   title,
   items,
   isAdmin = false,
+  orphanIds,
+  onMovePhoto,
   onOpenEvent,
   onPhotoUpdate,
   onPhotoDelete,
@@ -98,6 +104,15 @@ export default function PhotoSection({
               photo={it.photo}
               variantClass={VARIANT_CLASS[variants.get(it.photo.id) ?? "medium"]}
               isAdmin={isAdmin}
+              canMoveUp={
+                !!orphanIds && orphanIds.indexOf(it.photo.id) > 0
+              }
+              canMoveDown={
+                !!orphanIds &&
+                orphanIds.indexOf(it.photo.id) >= 0 &&
+                orphanIds.indexOf(it.photo.id) < orphanIds.length - 1
+              }
+              onMove={onMovePhoto}
               onUpdate={onPhotoUpdate}
               onDelete={onPhotoDelete}
             />
@@ -192,12 +207,18 @@ function PhotoCard({
   photo,
   variantClass,
   isAdmin,
+  canMoveUp,
+  canMoveDown,
+  onMove,
   onUpdate,
   onDelete,
 }: {
   photo: Photo;
   variantClass: string;
   isAdmin: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (id: string, direction: -1 | 1) => void;
   onUpdate?: (id: string, patch: Partial<Photo>) => void;
   onDelete?: (id: string) => void;
 }) {
@@ -210,41 +231,17 @@ function PhotoCard({
   const isVideo = photo.kind === "video";
   const isHidden = photo.status === "hidden";
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: photo.id });
-
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  function onPointerDownCapture(e: React.PointerEvent) {
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-  }
-  function onClickCapture(e: React.MouseEvent) {
-    // Suppress click if the pointer moved more than a few px (= it was a drag).
-    if (!dragStartRef.current) return;
-    const dx = Math.abs(e.clientX - dragStartRef.current.x);
-    const dy = Math.abs(e.clientY - dragStartRef.current.y);
-    dragStartRef.current = null;
-    if (dx > 5 || dy > 5) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+  function move(e: React.MouseEvent, direction: -1 | 1) {
+    e.stopPropagation();
+    onMove?.(photo.id, direction);
   }
 
   return (
     <>
       <div
-        ref={setNodeRef}
-        {...attributes}
-        {...listeners}
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(true)}
-        onClickCapture={onClickCapture}
-        onPointerDownCapture={onPointerDownCapture}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -254,16 +251,11 @@ function PhotoCard({
         data-photo-id={photo.id}
         data-thumb-url={photo.thumb_url}
         className={cn(
-          "group relative block w-full cursor-grab overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl active:cursor-grabbing",
+          "group relative block w-full cursor-pointer overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl",
           variantClass,
           isHidden && "opacity-50",
-          isDragging && "z-20 opacity-70",
         )}
-        style={{
-          aspectRatio: `${w} / ${h}`,
-          transform: CSS.Transform.toString(transform),
-          transition,
-        }}
+        style={{ aspectRatio: `${w} / ${h}` }}
       >
         {isVideo ? (
           <video
@@ -301,6 +293,32 @@ function PhotoCard({
         {isHidden && (
           <div className="absolute left-2 top-2 rounded-full bg-black/65 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white/70 backdrop-blur">
             masqué
+          </div>
+        )}
+
+        {/* Reorder arrows — anyone can move a photo. Hidden until hover. */}
+        {onMove && (
+          <div className="absolute left-2 top-2 z-10 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={(e) => move(e, -1)}
+              disabled={!canMoveUp}
+              aria-label="Reculer"
+              title="Reculer"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => move(e, 1)}
+              disabled={!canMoveDown}
+              aria-label="Avancer"
+              title="Avancer"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
           </div>
         )}
 
