@@ -44,7 +44,10 @@ export async function GET(req: Request) {
     return first;
   }
 
-  async function loadEvents() {
+  async function loadEvents(): Promise<{
+    data: unknown[] | null;
+    error: { message: string } | null;
+  }> {
     const first = await supabase
       .from("events")
       .select("*")
@@ -52,7 +55,7 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: true });
     // If the events table doesn't exist yet, return empty silently.
     if (first.error && /relation .*events.* does not exist/i.test(first.error.message)) {
-      return { data: [], error: null } as typeof first;
+      return { data: [], error: null };
     }
     return first;
   }

@@ -62,14 +62,17 @@ export default async function Page({
       }
       return first;
     }
-    async function loadEvents() {
+    async function loadEvents(): Promise<{
+      data: unknown[] | null;
+      error: { message: string } | null;
+    }> {
       const first = await supabase
         .from("events")
         .select("*")
         .eq("yearbook_id", YEARBOOK_ID)
         .order("created_at", { ascending: true });
       if (first.error && /relation .*events.* does not exist/i.test(first.error.message)) {
-        return { data: [] as never[], error: null } as typeof first;
+        return { data: [], error: null };
       }
       return first;
     }
