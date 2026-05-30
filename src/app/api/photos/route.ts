@@ -22,19 +22,43 @@ export async function GET(req: Request) {
 
   const supabase = supabaseAdmin();
   const visibleStatuses = isAdmin ? ["published", "hidden"] : ["published"];
-  const [photosRes, eventsRes] = await Promise.all([
-    supabase
+
+  // Try to order by sort_at (preferred). If the column is missing (migration
+  // 0007 not yet applied) fall back to taken_at so the page still renders.
+  async function loadPhotos() {
+    const first = await supabase
       .from("photos")
       .select("*, contributors(display_name), photo_people(person_id)")
       .eq("yearbook_id", YEARBOOK_ID)
       .in("status", visibleStatuses)
-      .order("sort_at", { ascending: true }),
-    supabase
+      .order("sort_at", { ascending: true });
+    if (!first.error) return first;
+    if (/sort_at/i.test(first.error.message)) {
+      return supabase
+        .from("photos")
+        .select("*, contributors(display_name), photo_people(person_id)")
+        .eq("yearbook_id", YEARBOOK_ID)
+        .in("status", visibleStatuses)
+        .order("taken_at", { ascending: true });
+    }
+    return first;
+  }
+
+  async function loadEvents() {
+    const first = await supabase
       .from("events")
       .select("*")
       .eq("yearbook_id", YEARBOOK_ID)
-      .order("created_at", { ascending: true }),
-  ]);
+      .order("created_at", { ascending: true });
+    // If the events table doesn't exist yet, return empty silently.
+    if (first.error && /relation .*events.* does not exist/i.test(first.error.message)) {
+      return { data: [], error: null } as typeof first;
+    }
+    return first;
+  }
+
+  const [photosRes, eventsRes] = await Promise.all([loadPhotos(), loadEvents()]);
+
   if (photosRes.error) {
     return NextResponse.json({ error: photosRes.error.message }, { status: 500 });
   }

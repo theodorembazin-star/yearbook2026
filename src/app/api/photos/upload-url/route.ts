@@ -39,20 +39,25 @@ export async function POST(req: Request) {
   }
 
   const takenAt = parsed.data.takenAt ?? new Date().toISOString();
-  const { error: insertErr } = await supabase.from("photos").insert({
+  const basePayload: Record<string, unknown> = {
     id: photoId,
     yearbook_id: YEARBOOK_ID,
     r2_key: key,
     taken_at: takenAt,
-    sort_at: takenAt,
     caption: parsed.data.caption,
     status: "pending",
     media_type: isVideo ? "video" : "image",
-  });
+  };
+
+  let { error: insertErr } = await supabase
+    .from("photos")
+    .insert({ ...basePayload, sort_at: takenAt });
+  // Migration 0007 not applied? Retry without sort_at.
+  if (insertErr && /sort_at/i.test(insertErr.message)) {
+    ({ error: insertErr } = await supabase.from("photos").insert(basePayload));
+  }
   if (insertErr) {
     console.error("upload-url: insert failed", insertErr);
-    // Most common cause: migration 0003 not applied → yearbook row missing,
-    // FK violation here.
     return NextResponse.json(
       {
         error: "insert_failed",
