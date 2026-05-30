@@ -27,6 +27,7 @@ type Pending = {
   width?: number;
   height?: number;
   kind: "image" | "video";
+  caption: string;
   status: "queued" | "processing" | "uploading" | "done" | "error";
   progress: number;
   remoteId?: string;
@@ -98,6 +99,7 @@ export default function UploadDialog({
         preview: URL.createObjectURL(file),
         takenAt: null,
         kind: file.type.startsWith("video/") ? "video" : "image",
+        caption: "",
         status: "queued",
         progress: 0,
       }));
@@ -235,6 +237,7 @@ export default function UploadDialog({
               height: i.height,
               uploaderName: name.trim(),
               peopleIds: tagged,
+              caption: i.caption.trim() || undefined,
             }),
           }),
         ),
@@ -254,6 +257,7 @@ export default function UploadDialog({
         uploaded_at: new Date().toISOString(),
         uploader_id: "local",
         uploader_name: name.trim(),
+        caption: i.caption.trim() || undefined,
         people_ids: tagged,
         status: "published",
         kind: i.kind,
@@ -352,44 +356,67 @@ export default function UploadDialog({
             {items.map((i) => (
               <div
                 key={i.id}
-                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2"
+                className="rounded-xl border border-white/10 bg-white/5 p-2"
               >
-                {i.kind === "video" ? (
-                  <video
-                    src={i.preview}
-                    muted
-                    playsInline
-                    className="h-12 w-12 rounded-lg object-cover"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={i.preview}
-                    alt=""
-                    className="h-12 w-12 rounded-lg object-cover"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white/80">
-                    {i.file.name}
-                    {i.kind === "video" && (
-                      <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/55">
-                        vidéo
-                      </span>
+                <div className="flex items-center gap-3">
+                  {i.kind === "video" ? (
+                    <video
+                      src={i.preview}
+                      muted
+                      playsInline
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={i.preview}
+                      alt=""
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-white/80">
+                      {i.file.name}
+                      {i.kind === "video" && (
+                        <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/55">
+                          vidéo
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-white/45">
+                      {i.takenAt
+                        ? new Date(i.takenAt).toLocaleDateString("fr-FR")
+                        : "lecture date…"}
+                    </div>
+                    {errors[i.id] && (
+                      <div className="mt-1 truncate text-xs text-red-400">
+                        {errors[i.id]}
+                      </div>
                     )}
                   </div>
-                  <div className="text-xs text-white/45">
-                    {i.takenAt
-                      ? new Date(i.takenAt).toLocaleDateString("fr-FR")
-                      : "lecture date…"}
-                  </div>
-                  {errors[i.id] && (
-                    <div className="mt-1 truncate text-xs text-red-400">
-                      {errors[i.id]}
-                    </div>
+                  <StatusIcon status={i.status} progress={i.progress} />
+                </div>
+                <div className="mt-2 flex items-center gap-2 border-t border-white/5 pt-2">
+                  <input
+                    type="text"
+                    value={i.caption}
+                    onChange={(e) =>
+                      setItems((prev) =>
+                        prev.map((p) =>
+                          p.id === i.id ? { ...p, caption: e.target.value } : p,
+                        ),
+                      )
+                    }
+                    placeholder="Légende (optionnel)"
+                    maxLength={280}
+                    className="min-w-0 flex-1 bg-transparent text-xs text-white/80 placeholder-white/30 outline-none"
+                  />
+                  {i.caption.length > 200 && (
+                    <span className="shrink-0 text-[10px] text-white/35 tabular-nums">
+                      {i.caption.length}/280
+                    </span>
                   )}
                 </div>
-                <StatusIcon status={i.status} progress={i.progress} />
               </div>
             ))}
           </div>
