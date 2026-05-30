@@ -22,16 +22,27 @@ export async function GET(req: Request) {
 
   const supabase = supabaseAdmin();
   const visibleStatuses = isAdmin ? ["published", "hidden"] : ["published"];
-  const { data, error } = await supabase
-    .from("photos")
-    .select("*, contributors(display_name), photo_people(person_id)")
-    .eq("yearbook_id", YEARBOOK_ID)
-    .in("status", visibleStatuses)
-    .order("taken_at", { ascending: true });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const [photosRes, eventsRes] = await Promise.all([
+    supabase
+      .from("photos")
+      .select("*, contributors(display_name), photo_people(person_id)")
+      .eq("yearbook_id", YEARBOOK_ID)
+      .in("status", visibleStatuses)
+      .order("taken_at", { ascending: true }),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("yearbook_id", YEARBOOK_ID)
+      .order("created_at", { ascending: true }),
+  ]);
+  if (photosRes.error) {
+    return NextResponse.json({ error: photosRes.error.message }, { status: 500 });
   }
-  return NextResponse.json({ photos: data ?? [] }, {
-    headers: { "cache-control": "no-store" },
-  });
+  return NextResponse.json(
+    {
+      photos: photosRes.data ?? [],
+      events: eventsRes.data ?? [],
+    },
+    { headers: { "cache-control": "no-store" } },
+  );
 }

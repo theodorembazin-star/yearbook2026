@@ -36,6 +36,15 @@ export type Photo = {
   people_ids: string[]; // assigned person clusters
   status: "pending" | "published" | "hidden";
   kind: "image" | "video";
+  event_id?: string;
+};
+
+export type Event = {
+  id: string;
+  yearbook_id: string;
+  title: string;
+  cover_photo_id?: string;
+  created_at: string;
 };
 
 export type LayoutBlock = {

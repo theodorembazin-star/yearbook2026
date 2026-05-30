@@ -1,12 +1,13 @@
 // Maps a Supabase row to the UI Photo type. Files live in the public 'photos'
 // bucket of Supabase Storage; URLs follow the standard public path:
 //   {SUPABASE_URL}/storage/v1/object/public/photos/{key}
-import type { Photo, Person } from "./types";
+import type { Event, Photo, Person } from "./types";
 import type { Database } from "./supabase/types";
 
 type DBPhoto = Database["public"]["Tables"]["photos"]["Row"] & {
   uploader_name?: string | null;
   media_type?: "image" | "video" | null;
+  event_id?: string | null;
   contributors: { display_name: string } | null;
   photo_people: { person_id: string }[] | null;
 };
@@ -36,6 +37,23 @@ export function photoFromRow(row: DBPhoto): Photo {
     people_ids: (row.photo_people ?? []).map((p) => p.person_id),
     status: row.status,
     kind: row.media_type === "video" ? "video" : "image",
+    event_id: row.event_id ?? undefined,
+  };
+}
+
+export function eventFromRow(row: {
+  id: string;
+  yearbook_id: string;
+  title: string;
+  cover_photo_id?: string | null;
+  created_at: string;
+}): Event {
+  return {
+    id: row.id,
+    yearbook_id: row.yearbook_id,
+    title: row.title,
+    cover_photo_id: row.cover_photo_id ?? undefined,
+    created_at: row.created_at,
   };
 }
 

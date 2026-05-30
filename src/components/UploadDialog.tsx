@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { X, UploadCloud, Loader2, Check } from "lucide-react";
-import type { Photo, Person } from "@/lib/types";
+import type { Event, Photo, Person } from "@/lib/types";
+import { eventFromRow } from "@/lib/db";
+import { Layers, Plus as PlusIcon } from "lucide-react";
 import { nanoid } from "nanoid";
 import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
 import { YEARBOOK_ID } from "@/lib/config";
@@ -12,11 +14,14 @@ type Props = {
   open: boolean;
   onClose: () => void;
   people: Person[];
+  events: Event[];
   demo?: boolean;
   /** Demo-mode: inject the freshly produced photos straight into the parent. */
   onUploaded: (photos: Photo[]) => void;
   /** Live-mode: ask the parent to refetch from the DB so the grid catches up. */
   onCommit?: () => void;
+  /** Called when a new event has just been created from this dialog. */
+  onEventCreated?: (ev: Event) => void;
 };
 
 type Pending = {
@@ -74,9 +79,11 @@ export default function UploadDialog({
   open,
   onClose,
   people,
+  events,
   demo = false,
   onUploaded,
   onCommit,
+  onEventCreated,
 }: Props) {
   const [items, setItems] = useState<Pending[]>([]);
   const [name, setName] = useState<string>(() =>
@@ -85,6 +92,10 @@ export default function UploadDialog({
   const [dragOver, setDragOver] = useState(false);
   const [tagged, setTagged] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [eventId, setEventId] = useState<string>("");
+  const [creatingEvent, setCreatingEvent] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState("");
+  const [creatingBusy, setCreatingBusy] = useState(false);
 
   const live = !demo && isSupabaseConfigured();
 
@@ -238,6 +249,7 @@ export default function UploadDialog({
               uploaderName: name.trim(),
               peopleIds: tagged,
               caption: i.caption.trim() || undefined,
+              eventId: eventId || undefined,
             }),
           }),
         ),
@@ -267,7 +279,45 @@ export default function UploadDialog({
 
     setItems([]);
     setTagged([]);
+    setEventId("");
     onClose();
+  }
+
+  async function createEvent() {
+    const title = newEventTitle.trim();
+    if (!title || creatingBusy) return;
+    setCreatingBusy(true);
+    try {
+      if (!live) {
+        // Demo: fabricate locally
+        const fake: Event = {
+          id: nanoid(),
+          yearbook_id: "demo",
+          title,
+          created_at: new Date().toISOString(),
+        };
+        onEventCreated?.(fake);
+        setEventId(fake.id);
+      } else {
+        const res = await fetch("/api/events", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        if (res.ok) {
+          const { event } = (await res.json()) as { event: unknown };
+          if (event) {
+            const ev = eventFromRow(event as never);
+            onEventCreated?.(ev);
+            setEventId(ev.id);
+          }
+        }
+      }
+      setCreatingEvent(false);
+      setNewEventTitle("");
+    } finally {
+      setCreatingBusy(false);
+    }
   }
 
   const canPublish = useMemo(
@@ -419,6 +469,89 @@ export default function UploadDialog({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {items.length > 0 && (
+          <div className="mt-5">
+            <p className="text-sm font-medium text-white/80">
+              Lié à un évènement ?
+            </p>
+            <p className="text-xs text-white/45">
+              Optionnel — toutes les photos du lot rejoindront ce groupe.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEventId("")}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs transition",
+                  eventId === ""
+                    ? "border-white bg-white text-ink/70"
+                    : "border-white/20 bg-white/5 text-white/75 hover:bg-white/15",
+                )}
+              >
+                Aucun
+              </button>
+              {events.map((ev) => {
+                const active = eventId === ev.id;
+                return (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => setEventId(ev.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition",
+                      active
+                        ? "border-white bg-white text-ink/70"
+                        : "border-white/20 bg-white/5 text-white/75 hover:bg-white/15",
+                    )}
+                  >
+                    <Layers className="h-3 w-3" />
+                    {ev.title}
+                  </button>
+                );
+              })}
+              {creatingEvent ? (
+                <div className="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/5 px-1 py-0.5">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newEventTitle}
+                    onChange={(e) => setNewEventTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void createEvent();
+                      } else if (e.key === "Escape") {
+                        setCreatingEvent(false);
+                        setNewEventTitle("");
+                      }
+                    }}
+                    placeholder="Titre"
+                    maxLength={80}
+                    className="w-32 bg-transparent px-2 py-0.5 text-xs text-white/85 placeholder-white/30 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void createEvent()}
+                    disabled={!newEventTitle.trim() || creatingBusy}
+                    className="rounded-full bg-accent px-2 py-0.5 text-[10px] text-cream disabled:opacity-50"
+                  >
+                    OK
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCreatingEvent(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-white/25 bg-transparent px-3 py-1 text-xs text-white/65 hover:bg-white/10 hover:text-white/85"
+                >
+                  <PlusIcon className="h-3 w-3" />
+                  Nouvel évènement
+                </button>
+              )}
+            </div>
           </div>
         )}
 

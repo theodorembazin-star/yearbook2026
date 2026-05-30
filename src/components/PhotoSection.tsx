@@ -3,8 +3,8 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Download, Eye, EyeOff, Loader2, Trash2 } from "lucide-react";
-import type { Photo } from "@/lib/types";
+import { Download, Eye, EyeOff, Layers, Loader2, Trash2 } from "lucide-react";
+import type { Event, Photo } from "@/lib/types";
 import { cn, formatDateFr } from "@/lib/utils";
 
 type Variant = "small" | "medium" | "large" | "hero";
@@ -16,11 +16,19 @@ const VARIANT_CLASS: Record<Variant, string> = {
   hero: "col-span-2 md:col-span-6",
 };
 
+export type TimelineItem =
+  | { kind: "photo"; photo: Photo }
+  | {
+      kind: "event";
+      bundle: { event: Event; cover: Photo; count: number; date: string };
+    };
+
 type SectionProps = {
   id: string;
   title: string;
-  photos: Photo[];
+  items: TimelineItem[];
   isAdmin?: boolean;
+  onOpenEvent?: (id: string) => void;
   onPhotoUpdate?: (id: string, patch: Partial<Photo>) => void;
   onPhotoDelete?: (id: string) => void;
 };
@@ -28,25 +36,36 @@ type SectionProps = {
 export default function PhotoSection({
   id,
   title,
-  photos,
+  items,
   isAdmin = false,
+  onOpenEvent,
   onPhotoUpdate,
   onPhotoDelete,
 }: SectionProps) {
   const variants = useMemo<Map<string, Variant>>(() => {
     const map = new Map<string, Variant>();
-    photos.forEach((p, i) => {
-      const ratio = (p.width || 1200) / (p.height || 800);
+    items.forEach((it, i) => {
+      const key = it.kind === "photo" ? it.photo.id : it.bundle.event.id;
+      const dims =
+        it.kind === "photo"
+          ? { w: it.photo.width || 1200, h: it.photo.height || 800 }
+          : {
+              w: it.bundle.cover.width || 1200,
+              h: it.bundle.cover.height || 800,
+            };
+      const ratio = dims.w / dims.h;
       let v: Variant;
       if (ratio > 1.85) v = "hero";
       else if (ratio > 1.4) v = i % 3 === 0 ? "large" : "medium";
       else if (ratio > 0.9) v = i % 4 === 0 ? "large" : "medium";
       else v = i % 5 === 0 ? "medium" : "small";
       if (i > 0 && i % 7 === 0 && v !== "hero" && ratio > 1.1) v = "hero";
-      map.set(p.id, v);
+      // Events get a bit more presence by default
+      if (it.kind === "event" && v === "small") v = "medium";
+      map.set(key, v);
     });
     return map;
-  }, [photos]);
+  }, [items]);
 
   return (
     <section id={id} className="scroll-mt-28 py-12">
@@ -55,23 +74,105 @@ export default function PhotoSection({
           {title}
         </h2>
         <span className="text-sm text-white/50">
-          {photos.length} photo{photos.length > 1 ? "s" : ""}
+          {items.length} élément{items.length > 1 ? "s" : ""}
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-6 [grid-auto-flow:dense] items-start">
-        {photos.map((p) => (
-          <PhotoCard
-            key={p.id}
-            photo={p}
-            variantClass={VARIANT_CLASS[variants.get(p.id) ?? "medium"]}
-            isAdmin={isAdmin}
-            onUpdate={onPhotoUpdate}
-            onDelete={onPhotoDelete}
-          />
-        ))}
+        {items.map((it) =>
+          it.kind === "photo" ? (
+            <PhotoCard
+              key={it.photo.id}
+              photo={it.photo}
+              variantClass={VARIANT_CLASS[variants.get(it.photo.id) ?? "medium"]}
+              isAdmin={isAdmin}
+              onUpdate={onPhotoUpdate}
+              onDelete={onPhotoDelete}
+            />
+          ) : (
+            <EventTile
+              key={it.bundle.event.id}
+              bundle={it.bundle}
+              variantClass={
+                VARIANT_CLASS[variants.get(it.bundle.event.id) ?? "medium"]
+              }
+              onOpen={() => onOpenEvent?.(it.bundle.event.id)}
+            />
+          ),
+        )}
       </div>
     </section>
+  );
+}
+
+function EventTile({
+  bundle,
+  variantClass,
+  onOpen,
+}: {
+  bundle: { event: Event; cover: Photo; count: number; date: string };
+  variantClass: string;
+  onOpen: () => void;
+}) {
+  const w = bundle.cover.width || 1200;
+  const h = bundle.cover.height || 800;
+  const isVideo = bundle.cover.kind === "video";
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className={cn(
+        "group relative block w-full cursor-pointer overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl",
+        variantClass,
+      )}
+      style={{ aspectRatio: `${w} / ${h}` }}
+    >
+      {isVideo ? (
+        <video
+          src={bundle.cover.url}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+        />
+      ) : (
+        <Image
+          src={bundle.cover.thumb_url}
+          alt={bundle.event.title}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover transition duration-500 group-hover:scale-[1.02]"
+        />
+      )}
+
+      {/* Stack indicator + title always visible at the bottom of the tile. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-4">
+        <div className="flex items-end justify-between gap-3">
+          <p className="font-display text-lg font-semibold leading-tight text-white/90 line-clamp-2">
+            {bundle.event.title}
+          </p>
+          <div className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-xs text-white/85 backdrop-blur">
+            <Layers className="h-3 w-3" />
+            {bundle.count}
+          </div>
+        </div>
+      </div>
+
+      {/* Top-right badge to signal it's a group, even before the title fades in. */}
+      <div className="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center gap-1 rounded-full bg-black/50 px-2 text-[10px] uppercase tracking-wider text-white/80 backdrop-blur">
+        <Layers className="h-3 w-3" />
+        Évènement
+      </div>
+    </div>
   );
 }
 
@@ -138,9 +239,6 @@ function PhotoCard({
           />
         )}
 
-        {/* Caption + meta overlay — unfolds from the bottom on hover.
-            Outer wrapper handles the gradient fade-in, inner block slides
-            up so the text reads as a deroulement, not just a flash-in. */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent p-4 text-left opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           <div className="translate-y-3 transition-transform duration-300 ease-out group-hover:translate-y-0">
             {photo.caption && (
@@ -262,7 +360,13 @@ function AdminControls({
   );
 }
 
-function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
+export function Lightbox({
+  photo,
+  onClose,
+}: {
+  photo: Photo;
+  onClose: () => void;
+}) {
   const isVideo = photo.kind === "video";
   const [downloading, setDownloading] = useState(false);
 
@@ -275,7 +379,6 @@ function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
       if (!res.ok) throw new Error(`download_failed: ${res.status}`);
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
-      // Sniff a sensible extension from the URL/blob type.
       const fromUrl = photo.url.split("?")[0].split(".").pop()?.toLowerCase();
       const fromMime = (blob.type || "").split("/")[1]?.split(";")[0];
       const ext =

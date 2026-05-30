@@ -7,21 +7,23 @@ import Aurora from "./Aurora";
 import Hero from "./Hero";
 import { extractPalette, DEFAULT_PALETTE, HERO_PALETTE } from "@/lib/colors";
 import { YEARBOOK_SUBTITLE } from "@/lib/config";
-import type { Person, Photo, Yearbook } from "@/lib/types";
+import type { Event, Person, Photo, Yearbook } from "@/lib/types";
 import { monthKey, formatMonthFr } from "@/lib/utils";
 import Timeline from "./Timeline";
-import PhotoSection from "./PhotoSection";
+import PhotoSection, { type TimelineItem } from "./PhotoSection";
+import EventModal from "./EventModal";
 import UploadDialog from "./UploadDialog";
 import PeopleFilter from "./PeopleFilter";
 import AdminPanel from "./AdminPanel";
 import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
-import { photoFromRow } from "@/lib/db";
+import { photoFromRow, eventFromRow } from "@/lib/db";
 import { YEARBOOK_ID } from "@/lib/config";
 
 type Props = {
   yearbook: Yearbook;
   photos: Photo[];
   people: Person[];
+  events: Event[];
   isAdmin?: boolean;
   demo?: boolean;
 };
@@ -30,15 +32,18 @@ export default function YearbookView({
   yearbook,
   photos: initial,
   people: initialPeople,
+  events: initialEvents,
   isAdmin = false,
   demo = false,
 }: Props) {
   const [photos, setPhotos] = useState<Photo[]>(initial);
   const [people, setPeople] = useState<Person[]>(initialPeople);
+  const [events, setEvents] = useState<Event[]>(initialEvents);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [activePeople, setActivePeople] = useState<string[]>([]);
+  const [openEventId, setOpenEventId] = useState<string | null>(null);
 
   // Close the info popover when the user clicks anywhere else.
   useEffect(() => {
@@ -51,9 +56,9 @@ export default function YearbookView({
     return () => document.removeEventListener("mousedown", onDown);
   }, [infoOpen]);
 
-  // Single source of truth for refetching photos. Goes through a server
-  // endpoint that uses the service-role client, so it never gets blocked
-  // by RLS (the browser client + anon key sometimes returns empty here).
+  // Single source of truth for refetching photos + events. Goes through a
+  // server endpoint that uses the service-role client, so it never gets
+  // blocked by RLS.
   const refreshPhotos = useCallback(async () => {
     if (demo || !isSupabaseConfigured()) return;
     try {
@@ -67,25 +72,25 @@ export default function YearbookView({
       );
       if (!res.ok) {
         console.warn("refreshPhotos failed:", res.status);
-        return; // keep current state instead of blanking the grid
+        return;
       }
-      const { photos: rows } = (await res.json()) as { photos: unknown[] };
+      const { photos: rows, events: evRows } = (await res.json()) as {
+        photos: unknown[];
+        events?: unknown[];
+      };
       setPhotos((rows ?? []).map(photoFromRow as never));
+      if (Array.isArray(evRows))
+        setEvents(evRows.map(eventFromRow as never));
     } catch (e) {
       console.warn("refreshPhotos network error:", e);
     }
   }, [demo, isAdmin]);
 
-  // Optimistic helpers — used in demo mode where there's no DB to refetch.
   const optimisticUpdate = useCallback(
     (id: string, patch: Partial<Photo>) => {
       setPhotos((prev) => {
         const out = prev.map((p) => (p.id === id ? { ...p, ...patch } : p));
-        // If we're not admin and the photo just became hidden, drop it from
-        // the local list too so the visitor view matches the server.
-        return isAdmin
-          ? out
-          : out.filter((p) => p.status !== "hidden");
+        return isAdmin ? out : out.filter((p) => p.status !== "hidden");
       });
     },
     [isAdmin],
@@ -94,7 +99,7 @@ export default function YearbookView({
     setPhotos((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
-  // Realtime: refetch on any photo or person change
+  // Realtime
   useEffect(() => {
     if (demo || !isSupabaseConfigured()) return;
     const supabase = supabaseBrowser();
@@ -103,9 +108,12 @@ export default function YearbookView({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "photos", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
-        () => {
-          void refreshPhotos();
-        },
+        () => void refreshPhotos(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "events", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
+        () => void refreshPhotos(),
       )
       .on(
         "postgres_changes",
@@ -142,21 +150,60 @@ export default function YearbookView({
     );
   }, [photos, activePeople]);
 
+  // Build the timeline items: orphan photos as single tiles, events as
+  // bundle tiles. Each event surfaces in the month of its earliest photo.
   const sections = useMemo(() => {
-    const groups = new Map<string, Photo[]>();
-    [...filtered]
-      .sort((a, b) => +new Date(a.taken_at) - +new Date(b.taken_at))
-      .forEach((p) => {
-        const k = monthKey(p.taken_at);
-        if (!groups.has(k)) groups.set(k, []);
-        groups.get(k)!.push(p);
+    const eventPhotos = new Map<string, Photo[]>();
+    const orphans: Photo[] = [];
+    for (const p of filtered) {
+      if (p.event_id) {
+        const list = eventPhotos.get(p.event_id) ?? [];
+        list.push(p);
+        eventPhotos.set(p.event_id, list);
+      } else {
+        orphans.push(p);
+      }
+    }
+
+    const items: (TimelineItem & { _date: number })[] = [];
+
+    for (const p of orphans) {
+      items.push({
+        _date: +new Date(p.taken_at),
+        kind: "photo",
+        photo: p,
       });
-    return Array.from(groups.entries()).map(([key, items]) => ({
+    }
+
+    for (const ev of events) {
+      const list = (eventPhotos.get(ev.id) ?? []).sort(
+        (a, b) => +new Date(a.taken_at) - +new Date(b.taken_at),
+      );
+      if (list.length === 0) continue; // empty events stay invisible
+      const cover =
+        list.find((p) => p.id === ev.cover_photo_id) ?? list[0];
+      items.push({
+        _date: +new Date(list[0].taken_at),
+        kind: "event",
+        bundle: { event: ev, cover, count: list.length, date: list[0].taken_at },
+      });
+    }
+
+    items.sort((a, b) => a._date - b._date);
+
+    const groups = new Map<string, TimelineItem[]>();
+    for (const it of items) {
+      const k = monthKey(it.kind === "photo" ? it.photo.taken_at : it.bundle.date);
+      const list = groups.get(k) ?? [];
+      list.push(it);
+      groups.set(k, list);
+    }
+    return Array.from(groups.entries()).map(([key, list]) => ({
       key,
       title: formatMonthFr(key),
-      items,
+      items: list,
     }));
-  }, [filtered]);
+  }, [filtered, events]);
 
   const contributorCount = useMemo(
     () => new Set(photos.map((p) => p.uploader_name)).size,
@@ -164,24 +211,17 @@ export default function YearbookView({
   );
 
   function onUploaded(newPhotos: Photo[]) {
-    // Demo path: append the freshly produced Photo[] to local state.
     setPhotos((prev) => [...prev, ...newPhotos]);
   }
 
   // ---------- Aurora palette derived from currently visible photos ----------
   const [palette, setPalette] = useState<string[]>(DEFAULT_PALETTE);
-  // While the visitor is on the welcome screen we override with a navy/green
-  // palette. Once they commit past the hero, we revert to the photo-derived
-  // palette below. Threshold is intentionally low so the swap happens early
-  // in the resistance zone — the Aurora's CSS transition smooths it out.
   const [onHero, setOnHero] = useState(true);
   const palettesRef = useRef<Map<string, string[]>>(new Map());
   const visibleRef = useRef<Set<string>>(new Set());
   const photosRef = useRef<Photo[]>([]);
   photosRef.current = photos;
 
-  // Extract palettes for every photo in the background, with a 2-concurrent
-  // queue so we don't block the main thread.
   useEffect(() => {
     let cancelled = false;
     let inflight = 0;
@@ -194,7 +234,6 @@ export default function YearbookView({
           .then((palette) => {
             if (cancelled) return;
             palettesRef.current.set(p.id, palette);
-            // If this photo is currently the topmost visible, refresh palette.
             const top = topmostVisiblePalette();
             if (top) setPalette(top);
           })
@@ -213,7 +252,6 @@ export default function YearbookView({
   function topmostVisiblePalette(): string[] | null {
     const visible = visibleRef.current;
     if (visible.size === 0) return null;
-    // Photos are already sorted ascending by date in the DOM order.
     for (const p of photosRef.current) {
       if (visible.has(p.id)) {
         const palette = palettesRef.current.get(p.id);
@@ -223,7 +261,6 @@ export default function YearbookView({
     return null;
   }
 
-  // Observe photo cards: when a new one becomes visible, refresh aurora.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const observer = new IntersectionObserver(
@@ -241,8 +278,19 @@ export default function YearbookView({
     );
     document.querySelectorAll("[data-photo-id]").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-    // Re-run when the rendered photo set changes
   }, [sections]);
+
+  // Photos that belong to the currently-open event (for the modal).
+  const openEventPhotos = useMemo(() => {
+    if (!openEventId) return [];
+    return photos
+      .filter((p) => p.event_id === openEventId)
+      .sort((a, b) => +new Date(a.taken_at) - +new Date(b.taken_at));
+  }, [openEventId, photos]);
+  const openEvent = useMemo(
+    () => events.find((e) => e.id === openEventId) ?? null,
+    [openEventId, events],
+  );
 
   return (
     <div className="min-h-screen">
@@ -254,8 +302,6 @@ export default function YearbookView({
         onProgress={(p) => setOnHero(p < 0.5)}
       />
 
-      {/* `snap-y` + `snap-proximity` provides a gentle pull at month
-          boundaries without hard-stopping the scroll. */}
       <div
         id="yearbook-content"
         className="mx-auto flex max-w-6xl gap-8 px-6 pt-12"
@@ -296,8 +342,9 @@ export default function YearbookView({
                 key={s.key}
                 id={`s-${s.key}`}
                 title={s.title}
-                photos={s.items}
+                items={s.items}
                 isAdmin={isAdmin}
+                onOpenEvent={(id) => setOpenEventId(id)}
                 onPhotoUpdate={(id, patch) => {
                   optimisticUpdate(id, patch);
                   void refreshPhotos();
@@ -312,11 +359,6 @@ export default function YearbookView({
         </main>
       </div>
 
-      {/* Discreet floating actions bottom-right.
-          - Hidden while the welcome screen is in view; slides up from
-            below once the visitor crosses into the yearbook.
-          - Upload: small pill, neutral colors
-          - Admin (only when authenticated): icon-only gear */}
       <div
         className={cn(
           "fixed bottom-6 right-6 z-30 flex items-end gap-2 transition-all duration-500 ease-out",
@@ -325,8 +367,6 @@ export default function YearbookView({
             : "translate-y-0 opacity-100",
         )}
       >
-        {/* Info popover — fixed-anchored to the bottom-right corner of the
-            viewport so it never overflows on narrow screens. */}
         <div data-info-root>
           {infoOpen && (
             <div className="fixed bottom-20 right-4 z-40 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[#0d1422]/90 p-5 shadow-2xl backdrop-blur-2xl">
@@ -396,10 +436,16 @@ export default function YearbookView({
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         people={people}
+        events={events}
         demo={demo}
         onUploaded={onUploaded}
         onCommit={() => {
           void refreshPhotos();
+        }}
+        onEventCreated={(ev) => {
+          setEvents((prev) =>
+            prev.find((e) => e.id === ev.id) ? prev : [...prev, ev],
+          );
         }}
       />
 
@@ -409,6 +455,23 @@ export default function YearbookView({
         people={people}
         demo={demo}
       />
+
+      {openEvent && (
+        <EventModal
+          event={openEvent}
+          photos={openEventPhotos}
+          isAdmin={isAdmin}
+          onClose={() => setOpenEventId(null)}
+          onPhotoUpdate={(id, patch) => {
+            optimisticUpdate(id, patch);
+            void refreshPhotos();
+          }}
+          onPhotoDelete={(id) => {
+            optimisticDelete(id);
+            void refreshPhotos();
+          }}
+        />
+      )}
     </div>
   );
 }

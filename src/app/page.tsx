@@ -1,6 +1,6 @@
 import { demoPeople, demoPhotos } from "@/lib/mock";
 import { isServerConfigured, supabaseAdmin } from "@/lib/supabase/server";
-import { photoFromRow, personFromRow } from "@/lib/db";
+import { eventFromRow, photoFromRow, personFromRow } from "@/lib/db";
 import YearbookView from "@/components/YearbookView";
 import { YEARBOOK_ID, YEARBOOK_TITLE, YEARBOOK_EMOJI } from "@/lib/config";
 
@@ -27,6 +27,7 @@ export default async function Page({
         yearbook={yearbook}
         photos={demoPhotos}
         people={demoPeople}
+        events={[]}
         isAdmin={isAdmin}
         demo
       />
@@ -40,25 +41,32 @@ export default async function Page({
     // Admins also see hidden photos so they can manage them; visitors only
     // get the published ones.
     const visibleStatuses = isAdmin ? ["published", "hidden"] : ["published"];
-    const [{ data: photos }, { data: people }] = await Promise.all([
-      supabase
-        .from("photos")
-        .select("*, contributors(display_name), photo_people(person_id)")
-        .eq("yearbook_id", YEARBOOK_ID)
-        .in("status", visibleStatuses)
-        .order("taken_at", { ascending: true }),
-      supabase
-        .from("people")
-        .select("*")
-        .eq("yearbook_id", YEARBOOK_ID)
-        .order("created_at", { ascending: true }),
-    ]);
+    const [{ data: photos }, { data: people }, { data: events }] =
+      await Promise.all([
+        supabase
+          .from("photos")
+          .select("*, contributors(display_name), photo_people(person_id)")
+          .eq("yearbook_id", YEARBOOK_ID)
+          .in("status", visibleStatuses)
+          .order("taken_at", { ascending: true }),
+        supabase
+          .from("people")
+          .select("*")
+          .eq("yearbook_id", YEARBOOK_ID)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("events")
+          .select("*")
+          .eq("yearbook_id", YEARBOOK_ID)
+          .order("created_at", { ascending: true }),
+      ]);
 
     return (
       <YearbookView
         yearbook={yearbook}
         photos={(photos ?? []).map(photoFromRow as never)}
         people={(people ?? []).map(personFromRow)}
+        events={(events ?? []).map(eventFromRow as never)}
         isAdmin={isAdmin}
       />
     );
@@ -69,6 +77,7 @@ export default async function Page({
         yearbook={yearbook}
         photos={demoPhotos}
         people={demoPeople}
+        events={[]}
         isAdmin={isAdmin}
         demo
       />

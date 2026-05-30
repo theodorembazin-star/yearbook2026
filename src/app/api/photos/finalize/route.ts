@@ -11,6 +11,7 @@ const Body = z.object({
   caption: z.string().max(280).optional(),
   uploaderName: z.string().min(1).max(40),
   peopleIds: z.array(z.string().uuid()).optional(),
+  eventId: z.string().uuid().optional(),
 });
 
 export async function POST(req: Request) {
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
   if (parsed.data.height) update.height = parsed.data.height;
   if (parsed.data.takenAt) update.taken_at = parsed.data.takenAt;
   if (parsed.data.caption) update.caption = parsed.data.caption;
+  if (parsed.data.eventId) update.event_id = parsed.data.eventId;
 
   const { error } = await supabase
     .from("photos")
