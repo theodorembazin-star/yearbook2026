@@ -166,7 +166,13 @@ export default function EventModal({
         )}
       </div>
 
-      {lightbox && <Lightbox photo={lightbox} onClose={() => setLightbox(null)} />}
+      {lightbox && (
+        <Lightbox
+          photo={lightbox}
+          onClose={() => setLightbox(null)}
+          onUpdate={onPhotoUpdate}
+        />
+      )}
     </div>
   );
 }

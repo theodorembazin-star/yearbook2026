@@ -3,7 +3,17 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Download, Eye, EyeOff, Layers, Loader2, Trash2 } from "lucide-react";
+import {
+  Check,
+  Download,
+  Eye,
+  EyeOff,
+  Layers,
+  Loader2,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Event, Photo } from "@/lib/types";
 import { cn, formatDateFr } from "@/lib/utils";
 
@@ -269,7 +279,13 @@ function PhotoCard({
         )}
       </div>
 
-      {open && <Lightbox photo={photo} onClose={() => setOpen(false)} />}
+      {open && (
+        <Lightbox
+          photo={photo}
+          onClose={() => setOpen(false)}
+          onUpdate={onUpdate}
+        />
+      )}
     </>
   );
 }
@@ -360,15 +376,34 @@ function AdminControls({
   );
 }
 
+// Convert an ISO date string to the value expected by <input type="datetime-local">
+// (local time, no timezone suffix: "YYYY-MM-DDTHH:MM").
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
 export function Lightbox({
   photo,
   onClose,
+  onUpdate,
 }: {
   photo: Photo;
   onClose: () => void;
+  onUpdate?: (id: string, patch: Partial<Photo>) => void;
 }) {
   const isVideo = photo.kind === "video";
   const [downloading, setDownloading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftCaption, setDraftCaption] = useState(photo.caption ?? "");
+  const [draftDate, setDraftDate] = useState(isoToLocalInput(photo.taken_at));
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   async function download(e: React.MouseEvent) {
     e.stopPropagation();
@@ -401,6 +436,54 @@ export function Lightbox({
     }
   }
 
+  function startEdit() {
+    setDraftCaption(photo.caption ?? "");
+    setDraftDate(isoToLocalInput(photo.taken_at));
+    setEditError(null);
+    setEditing(true);
+  }
+  function cancelEdit() {
+    setEditing(false);
+    setEditError(null);
+  }
+  async function saveEdit() {
+    if (saving) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      const body: Record<string, unknown> = {};
+      const newCaption = draftCaption.trim();
+      const currentCaption = (photo.caption ?? "").trim();
+      if (newCaption !== currentCaption) body.caption = newCaption || null;
+      if (draftDate) {
+        const newIso = new Date(draftDate).toISOString();
+        if (newIso !== photo.taken_at) body.takenAt = newIso;
+      }
+      if (Object.keys(body).length === 0) {
+        setEditing(false);
+        return;
+      }
+      const res = await fetch(`/api/photos/${photo.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error ?? `error_${res.status}`);
+      }
+      onUpdate?.(photo.id, {
+        caption: typeof body.caption === "string" ? (body.caption as string) : body.caption === null ? undefined : photo.caption,
+        taken_at: typeof body.takenAt === "string" ? (body.takenAt as string) : photo.taken_at,
+      });
+      setEditing(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "unknown_error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       onClick={onClose}
@@ -427,29 +510,87 @@ export function Lightbox({
             className="max-h-[80vh] w-auto rounded-xl object-contain"
           />
         )}
-        <div className="mt-3 flex flex-col items-center gap-3 text-cream sm:flex-row sm:justify-between">
-          <div className="text-center sm:text-left">
-            {photo.caption && (
-              <p className="font-display text-2xl italic">{photo.caption}</p>
-            )}
-            <p className="mt-1 text-sm text-cream/70">
-              {formatDateFr(photo.taken_at)} · par {photo.uploader_name}
-            </p>
+
+        {editing ? (
+          <div className="mt-3 flex flex-col gap-2 text-cream">
+            <input
+              type="text"
+              value={draftCaption}
+              onChange={(e) => setDraftCaption(e.target.value)}
+              placeholder="Légende (optionnel)"
+              maxLength={280}
+              className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-accent"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <input
+                type="datetime-local"
+                value={draftDate}
+                onChange={(e) => setDraftDate(e.target.value)}
+                className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-accent"
+              />
+              <div className="flex items-center gap-2">
+                {editError && (
+                  <span className="text-xs text-red-300">{editError}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-2 text-sm text-white/75 hover:border-white/30 hover:text-white/90"
+                >
+                  <X className="h-4 w-4" /> Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1 rounded-full bg-accent px-4 py-2 text-sm text-cream shadow-lg shadow-accent/20 disabled:opacity-50"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Enregistrer
+                </button>
+              </div>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={download}
-            disabled={downloading}
-            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-white/20 hover:text-white disabled:opacity-50"
-          >
-            {downloading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            Télécharger
-          </button>
-        </div>
+        ) : (
+          <div className="mt-3 flex flex-col items-center gap-3 text-cream sm:flex-row sm:justify-between">
+            <div className="text-center sm:text-left">
+              {photo.caption && (
+                <p className="font-display text-2xl italic">{photo.caption}</p>
+              )}
+              <p className="mt-1 text-sm text-cream/70">
+                {formatDateFr(photo.taken_at)} · par {photo.uploader_name}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={startEdit}
+                aria-label="Modifier"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-white/20 hover:text-white"
+              >
+                <Pencil className="h-4 w-4" />
+                Modifier
+              </button>
+              <button
+                type="button"
+                onClick={download}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-white/20 hover:text-white disabled:opacity-50"
+              >
+                {downloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Télécharger
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

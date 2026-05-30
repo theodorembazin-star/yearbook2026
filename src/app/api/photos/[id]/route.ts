@@ -12,10 +12,19 @@ function isAdmin(req: Request): boolean {
   return fromQuery === adminToken || fromHeader === adminToken;
 }
 
-// PATCH /api/photos/<id>?admin=<token>
-// Body: { status: 'hidden' | 'published' }
-// Toggles visibility. Hidden photos are still fetched by admin sessions
-// (so they can unhide), but never shown to the public.
+// PATCH /api/photos/<id>
+//
+// Two roles share this endpoint:
+//   - Anyone can edit caption and taken_at (same openness as upload).
+//   - Only an admin can change status (hidden / published).
+//
+// Body accepts any combination of these fields; missing ones are left untouched.
+const Body = z.object({
+  status: z.enum(["hidden", "published"]).optional(),
+  caption: z.string().max(280).nullable().optional(),
+  takenAt: z.string().datetime().optional(),
+});
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -23,22 +32,31 @@ export async function PATCH(
   if (!isServerConfigured()) {
     return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
   }
-  if (!isAdmin(req)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-  const parsed = z
-    .object({ status: z.enum(["hidden", "published"]) })
-    .safeParse(await req.json().catch(() => null));
+  const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Status flips require the admin token; caption/date are open.
+  if (parsed.data.status !== undefined && !isAdmin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const update: Record<string, unknown> = {};
+  if (parsed.data.status !== undefined) update.status = parsed.data.status;
+  if (parsed.data.caption !== undefined)
+    update.caption = parsed.data.caption ? parsed.data.caption.trim() : null;
+  if (parsed.data.takenAt !== undefined) update.taken_at = parsed.data.takenAt;
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const { id } = await params;
   const supabase = supabaseAdmin();
   const { error } = await supabase
     .from("photos")
-    .update({ status: parsed.data.status })
+    .update(update)
     .eq("id", id)
     .eq("yearbook_id", YEARBOOK_ID);
   if (error) {
@@ -48,7 +66,7 @@ export async function PATCH(
 }
 
 // DELETE /api/photos/<id>?admin=<token>
-// Permanently removes the row + its storage object.
+// Permanently removes the row + its storage object. Admin only.
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -63,7 +81,6 @@ export async function DELETE(
   const { id } = await params;
   const supabase = supabaseAdmin();
 
-  // Fetch the storage key first so we can clean it up.
   const { data: photo } = await supabase
     .from("photos")
     .select("r2_key, thumb_key")
