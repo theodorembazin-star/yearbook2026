@@ -327,7 +327,7 @@ function Lightbox({ photo, onClose }: { photo: Photo; onClose: () => void }) {
         <div className="mt-3 flex flex-col items-center gap-3 text-cream sm:flex-row sm:justify-between">
           <div className="text-center sm:text-left">
             {photo.caption && (
-              <p className="font-hand text-2xl">{photo.caption}</p>
+              <p className="font-display text-2xl italic">{photo.caption}</p>
             )}
             <p className="mt-1 text-sm text-cream/70">
               {formatDateFr(photo.taken_at)} · par {photo.uploader_name}
