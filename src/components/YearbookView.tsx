@@ -18,6 +18,16 @@ import AdminPanel from "./AdminPanel";
 import { isSupabaseConfigured, supabaseBrowser } from "@/lib/supabase/client";
 import { photoFromRow, eventFromRow } from "@/lib/db";
 import { YEARBOOK_ID } from "@/lib/config";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable";
 
 type Props = {
   yearbook: Yearbook;
@@ -151,8 +161,9 @@ export default function YearbookView({
   }, [photos, activePeople]);
 
   // Build the timeline items: orphan photos as single tiles, events as
-  // bundle tiles. Each event surfaces in the month of its earliest photo.
-  const sections = useMemo(() => {
+  // bundle tiles. Order is driven by sort_at (so DnD wins over date edits).
+  // Events surface at their earliest photo's sort_at.
+  const { sections, orphanIds } = useMemo(() => {
     const eventPhotos = new Map<string, Photo[]>();
     const orphans: Photo[] = [];
     for (const p of filtered) {
@@ -169,7 +180,7 @@ export default function YearbookView({
 
     for (const p of orphans) {
       items.push({
-        _date: +new Date(p.taken_at),
+        _date: +new Date((p.sort_at ?? p.taken_at)),
         kind: "photo",
         photo: p,
       });
@@ -177,15 +188,20 @@ export default function YearbookView({
 
     for (const ev of events) {
       const list = (eventPhotos.get(ev.id) ?? []).sort(
-        (a, b) => +new Date(a.taken_at) - +new Date(b.taken_at),
+        (a, b) => +new Date((a.sort_at ?? a.taken_at)) - +new Date((b.sort_at ?? b.taken_at)),
       );
-      if (list.length === 0) continue; // empty events stay invisible
-      const cover =
-        list.find((p) => p.id === ev.cover_photo_id) ?? list[0];
+      if (list.length === 0) continue;
+      const cover = list.find((p) => p.id === ev.cover_photo_id) ?? list[0];
+      const firstSort = list[0].sort_at ?? list[0].taken_at;
       items.push({
-        _date: +new Date(list[0].taken_at),
+        _date: +new Date(firstSort),
         kind: "event",
-        bundle: { event: ev, cover, count: list.length, date: list[0].taken_at },
+        bundle: {
+          event: ev,
+          cover,
+          count: list.length,
+          date: firstSort,
+        },
       });
     }
 
@@ -193,16 +209,29 @@ export default function YearbookView({
 
     const groups = new Map<string, TimelineItem[]>();
     for (const it of items) {
-      const k = monthKey(it.kind === "photo" ? it.photo.taken_at : it.bundle.date);
+      const k = monthKey(
+        it.kind === "photo"
+          ? (it.photo.sort_at ?? it.photo.taken_at)
+          : it.bundle.date,
+      );
       const list = groups.get(k) ?? [];
       list.push(it);
       groups.set(k, list);
     }
-    return Array.from(groups.entries()).map(([key, list]) => ({
+    const sections = Array.from(groups.entries()).map(([key, list]) => ({
       key,
       title: formatMonthFr(key),
       items: list,
     }));
+
+    // Flat ordered list of orphan photo IDs across all sections — the
+    // single SortableContext that DnD operates on.
+    const orphanIds = orphans
+      .slice()
+      .sort((a, b) => +new Date((a.sort_at ?? a.taken_at)) - +new Date((b.sort_at ?? b.taken_at)))
+      .map((p) => p.id);
+
+    return { sections, orphanIds };
   }, [filtered, events]);
 
   const contributorCount = useMemo(
@@ -285,12 +314,62 @@ export default function YearbookView({
     if (!openEventId) return [];
     return photos
       .filter((p) => p.event_id === openEventId)
-      .sort((a, b) => +new Date(a.taken_at) - +new Date(b.taken_at));
+      .sort((a, b) => +new Date((a.sort_at ?? a.taken_at)) - +new Date((b.sort_at ?? b.taken_at)));
   }, [openEventId, photos]);
   const openEvent = useMemo(
     () => events.find((e) => e.id === openEventId) ?? null,
     [openEventId, events],
   );
+
+  // ---------- Drag & drop reorder (across all sections) ----------
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 220, tolerance: 8 },
+    }),
+  );
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIdx = orphanIds.indexOf(String(active.id));
+    const newIdx = orphanIds.indexOf(String(over.id));
+    if (oldIdx < 0 || newIdx < 0) return;
+
+    // Build the post-move list to read its neighbors and compute a new sort_at.
+    const next = orphanIds.slice();
+    next.splice(oldIdx, 1);
+    next.splice(newIdx, 0, String(active.id));
+    const findSort = (id: string) => {
+      const p = photos.find((x) => x.id === id);
+      return p ? (p.sort_at ?? p.taken_at) : null;
+    };
+    const prevId = next[newIdx - 1] ?? null;
+    const nextId = next[newIdx + 1] ?? null;
+    const prevSort = prevId ? findSort(prevId) : null;
+    const nextSort = nextId ? findSort(nextId) : null;
+
+    let newMs: number;
+    if (prevSort && nextSort) {
+      newMs = (new Date(prevSort).getTime() + new Date(nextSort).getTime()) / 2;
+    } else if (prevSort) {
+      newMs = new Date(prevSort).getTime() + 60 * 1000; // +1 min after last
+    } else if (nextSort) {
+      newMs = new Date(nextSort).getTime() - 60 * 1000; // -1 min before first
+    } else {
+      newMs = Date.now();
+    }
+    const newSort = new Date(newMs).toISOString();
+
+    optimisticUpdate(String(active.id), { sort_at: newSort });
+    void fetch(`/api/photos/${active.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sortAt: newSort }),
+    }).then(() => refreshPhotos());
+  }
 
   return (
     <div className="min-h-screen">
@@ -337,24 +416,32 @@ export default function YearbookView({
               onAdminClick={() => setAdminOpen(true)}
             />
           ) : (
-            sections.map((s) => (
-              <PhotoSection
-                key={s.key}
-                id={`s-${s.key}`}
-                title={s.title}
-                items={s.items}
-                isAdmin={isAdmin}
-                onOpenEvent={(id) => setOpenEventId(id)}
-                onPhotoUpdate={(id, patch) => {
-                  optimisticUpdate(id, patch);
-                  void refreshPhotos();
-                }}
-                onPhotoDelete={(id) => {
-                  optimisticDelete(id);
-                  void refreshPhotos();
-                }}
-              />
-            ))
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={orphanIds} strategy={rectSortingStrategy}>
+                {sections.map((s) => (
+                  <PhotoSection
+                    key={s.key}
+                    id={`s-${s.key}`}
+                    title={s.title}
+                    items={s.items}
+                    isAdmin={isAdmin}
+                    onOpenEvent={(id) => setOpenEventId(id)}
+                    onPhotoUpdate={(id, patch) => {
+                      optimisticUpdate(id, patch);
+                      void refreshPhotos();
+                    }}
+                    onPhotoDelete={(id) => {
+                      optimisticDelete(id);
+                      void refreshPhotos();
+                    }}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
         </main>
       </div>

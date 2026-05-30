@@ -8,6 +8,7 @@ type DBPhoto = Database["public"]["Tables"]["photos"]["Row"] & {
   uploader_name?: string | null;
   media_type?: "image" | "video" | null;
   event_id?: string | null;
+  sort_at?: string | null;
   contributors: { display_name: string } | null;
   photo_people: { person_id: string }[] | null;
 };
@@ -38,6 +39,7 @@ export function photoFromRow(row: DBPhoto): Photo {
     status: row.status,
     kind: row.media_type === "video" ? "video" : "image",
     event_id: row.event_id ?? undefined,
+    sort_at: row.sort_at ?? row.taken_at,
   };
 }
 

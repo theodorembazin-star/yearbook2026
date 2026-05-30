@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Check,
@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import type { Event, Photo } from "@/lib/types";
 import { cn, formatDateFr } from "@/lib/utils";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type Variant = "small" | "medium" | "large" | "hero";
 
@@ -208,12 +210,41 @@ function PhotoCard({
   const isVideo = photo.kind === "video";
   const isHidden = photo.status === "hidden";
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: photo.id });
+
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function onPointerDownCapture(e: React.PointerEvent) {
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+  }
+  function onClickCapture(e: React.MouseEvent) {
+    // Suppress click if the pointer moved more than a few px (= it was a drag).
+    if (!dragStartRef.current) return;
+    const dx = Math.abs(e.clientX - dragStartRef.current.x);
+    const dy = Math.abs(e.clientY - dragStartRef.current.y);
+    dragStartRef.current = null;
+    if (dx > 5 || dy > 5) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+
   return (
     <>
       <div
-        role="button"
-        tabIndex={0}
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
         onClick={() => setOpen(true)}
+        onClickCapture={onClickCapture}
+        onPointerDownCapture={onPointerDownCapture}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -223,11 +254,16 @@ function PhotoCard({
         data-photo-id={photo.id}
         data-thumb-url={photo.thumb_url}
         className={cn(
-          "group relative block w-full cursor-pointer overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl",
+          "group relative block w-full cursor-grab overflow-hidden rounded-2xl bg-ink/5 shadow-sm transition hover:shadow-xl active:cursor-grabbing",
           variantClass,
           isHidden && "opacity-50",
+          isDragging && "z-20 opacity-70",
         )}
-        style={{ aspectRatio: `${w} / ${h}` }}
+        style={{
+          aspectRatio: `${w} / ${h}`,
+          transform: CSS.Transform.toString(transform),
+          transition,
+        }}
       >
         {isVideo ? (
           <video

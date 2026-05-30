@@ -38,11 +38,13 @@ export async function POST(req: Request) {
     );
   }
 
+  const takenAt = parsed.data.takenAt ?? new Date().toISOString();
   const { error: insertErr } = await supabase.from("photos").insert({
     id: photoId,
     yearbook_id: YEARBOOK_ID,
     r2_key: key,
-    taken_at: parsed.data.takenAt ?? new Date().toISOString(),
+    taken_at: takenAt,
+    sort_at: takenAt,
     caption: parsed.data.caption,
     status: "pending",
     media_type: isVideo ? "video" : "image",

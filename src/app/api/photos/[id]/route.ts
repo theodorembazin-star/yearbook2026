@@ -23,6 +23,7 @@ const Body = z.object({
   status: z.enum(["hidden", "published"]).optional(),
   caption: z.string().max(280).nullable().optional(),
   takenAt: z.string().datetime().optional(),
+  sortAt: z.string().datetime().nullable().optional(),
 });
 
 export async function PATCH(
@@ -42,18 +43,36 @@ export async function PATCH(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  const { id } = await params;
+  const supabase = supabaseAdmin();
+
   const update: Record<string, unknown> = {};
   if (parsed.data.status !== undefined) update.status = parsed.data.status;
   if (parsed.data.caption !== undefined)
     update.caption = parsed.data.caption ? parsed.data.caption.trim() : null;
   if (parsed.data.takenAt !== undefined) update.taken_at = parsed.data.takenAt;
+  if (parsed.data.sortAt !== undefined) {
+    if (parsed.data.sortAt === null) {
+      // Reset: sort_at follows taken_at again.
+      if (parsed.data.takenAt) {
+        update.sort_at = parsed.data.takenAt;
+      } else {
+        const { data: row } = await supabase
+          .from("photos")
+          .select("taken_at")
+          .eq("id", id)
+          .maybeSingle();
+        update.sort_at = (row as { taken_at?: string } | null)?.taken_at;
+      }
+    } else {
+      update.sort_at = parsed.data.sortAt;
+    }
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ ok: true });
   }
 
-  const { id } = await params;
-  const supabase = supabaseAdmin();
   const { error } = await supabase
     .from("photos")
     .update(update)

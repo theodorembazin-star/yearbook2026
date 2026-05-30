@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       .select("*, contributors(display_name), photo_people(person_id)")
       .eq("yearbook_id", YEARBOOK_ID)
       .in("status", visibleStatuses)
-      .order("taken_at", { ascending: true }),
+      .order("sort_at", { ascending: true }),
     supabase
       .from("events")
       .select("*")

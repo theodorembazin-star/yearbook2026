@@ -28,7 +28,8 @@ export type Photo = {
   thumb_url: string;
   width: number;
   height: number;
-  taken_at: string; // ISO from EXIF or upload time
+  taken_at: string; // displayed date (EXIF / user input)
+  sort_at?: string; // position in the timeline; defaults to taken_at, overridden by DnD
   uploaded_at: string;
   uploader_id: string;
   uploader_name: string;
