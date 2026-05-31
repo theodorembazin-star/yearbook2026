@@ -313,9 +313,10 @@ export default function YearbookView({
 
   // ---------- Reorder by up/down arrows (across all sections) ----------
   // Move the orphan photo `id` by `direction` (-1 = up, +1 = down) in the
-  // flat order. Recomputes a new sort_at by inserting between its new
-  // neighbours; one PATCH; optimistic update for instant feedback.
-  function moveOrphan(id: string, direction: -1 | 1) {
+  // flat order. Server save on every click: PATCH sort_at, then refetch
+  // to reflect the truth. If the save fails (e.g. migration 0007 not
+  // applied) the refetch reverts the optimistic update.
+  async function moveOrphan(id: string, direction: -1 | 1) {
     const idx = orphanIds.indexOf(id);
     if (idx < 0) return;
     const target = idx + direction;
@@ -347,11 +348,29 @@ export default function YearbookView({
     const newSort = new Date(newMs).toISOString();
 
     optimisticUpdate(id, { sort_at: newSort });
-    void fetch(`/api/photos/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sortAt: newSort }),
-    }).then(() => refreshPhotos());
+    try {
+      const res = await fetch(`/api/photos/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sortAt: newSort }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error("Move PATCH failed", res.status, body);
+        if (
+          typeof window !== "undefined" &&
+          /sort_at/i.test(JSON.stringify(body))
+        ) {
+          window.alert(
+            "Sauvegarde impossible : applique la migration Supabase 0007_sort_at.sql.",
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Move PATCH network error", e);
+    } finally {
+      void refreshPhotos();
+    }
   }
 
   return (
