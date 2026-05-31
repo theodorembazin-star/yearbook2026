@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin, isServerConfigured } from "@/lib/supabase/server";
 import { YEARBOOK_ID } from "@/lib/config";
+import { audit, checkUnlocked } from "@/lib/audit";
 
 function isAdmin(req: Request): boolean {
   const adminToken = process.env.ADMIN_TOKEN;
@@ -12,18 +13,13 @@ function isAdmin(req: Request): boolean {
   return fromQuery === adminToken || fromHeader === adminToken;
 }
 
-// PATCH /api/photos/<id>
-//
-// Two roles share this endpoint:
-//   - Anyone can edit caption and taken_at (same openness as upload).
-//   - Only an admin can change status (hidden / published).
-//
-// Body accepts any combination of these fields; missing ones are left untouched.
 const Body = z.object({
   status: z.enum(["hidden", "published"]).optional(),
   caption: z.string().max(280).nullable().optional(),
   takenAt: z.string().datetime().optional(),
   sortAt: z.string().datetime().nullable().optional(),
+  eventId: z.string().uuid().nullable().optional(),
+  userName: z.string().max(40).optional(),
 });
 
 export async function PATCH(
@@ -38,22 +34,38 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Status flips require the admin token; caption/date are open.
-  if (parsed.data.status !== undefined && !isAdmin(req)) {
+  // Status flips require the admin token.
+  const admin = isAdmin(req);
+  if (parsed.data.status !== undefined && !admin) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const { id } = await params;
   const supabase = supabaseAdmin();
 
+  // Verrouillage global : non-admin bloqué.
+  if (!(await checkUnlocked(supabase, admin))) {
+    return NextResponse.json({ error: "locked" }, { status: 423 });
+  }
+
   const update: Record<string, unknown> = {};
-  if (parsed.data.status !== undefined) update.status = parsed.data.status;
-  if (parsed.data.caption !== undefined)
+  const actions: { action: Parameters<typeof audit>[1]["action"]; details?: Record<string, unknown> }[] = [];
+  if (parsed.data.status !== undefined) {
+    update.status = parsed.data.status;
+    actions.push({
+      action: parsed.data.status === "hidden" ? "hide_photo" : "unhide_photo",
+    });
+  }
+  if (parsed.data.caption !== undefined) {
     update.caption = parsed.data.caption ? parsed.data.caption.trim() : null;
-  if (parsed.data.takenAt !== undefined) update.taken_at = parsed.data.takenAt;
+    actions.push({ action: "edit_caption" });
+  }
+  if (parsed.data.takenAt !== undefined) {
+    update.taken_at = parsed.data.takenAt;
+    actions.push({ action: "edit_date", details: { takenAt: parsed.data.takenAt } });
+  }
   if (parsed.data.sortAt !== undefined) {
     if (parsed.data.sortAt === null) {
-      // Reset: sort_at follows taken_at again.
       if (parsed.data.takenAt) {
         update.sort_at = parsed.data.takenAt;
       } else {
@@ -67,6 +79,14 @@ export async function PATCH(
     } else {
       update.sort_at = parsed.data.sortAt;
     }
+    actions.push({ action: "move" });
+  }
+  if (parsed.data.eventId !== undefined) {
+    update.event_id = parsed.data.eventId; // null = détache de l'event
+    actions.push({
+      action: "edit_caption", // pas d'action dédiée → réutilise 'edit'
+      details: { eventId: parsed.data.eventId },
+    });
   }
 
   if (Object.keys(update).length === 0) {
@@ -81,11 +101,21 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  for (const a of actions) {
+    await audit(supabase, {
+      userName: parsed.data.userName,
+      action: a.action,
+      targetId: id,
+      details: a.details,
+    });
+  }
   return NextResponse.json({ ok: true });
 }
 
-// DELETE /api/photos/<id>?admin=<token>
-// Permanently removes the row + its storage object. Admin only.
+// DELETE /api/photos/<id>
+// Ouvert à tous (cohérent avec upload ouvert). Accepte userName en query
+// pour le journal. Verrouillage : seul l'admin peut supprimer si locked.
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -93,12 +123,16 @@ export async function DELETE(
   if (!isServerConfigured()) {
     return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
   }
-  if (!isAdmin(req)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
 
   const { id } = await params;
   const supabase = supabaseAdmin();
+  const url = new URL(req.url);
+  const userName = url.searchParams.get("name") ?? undefined;
+  const admin = isAdmin(req);
+
+  if (!(await checkUnlocked(supabase, admin))) {
+    return NextResponse.json({ error: "locked" }, { status: 423 });
+  }
 
   const { data: photo } = await supabase
     .from("photos")
@@ -125,5 +159,10 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  await audit(supabase, {
+    userName,
+    action: "delete_photo",
+    targetId: id,
+  });
   return NextResponse.json({ ok: true });
 }

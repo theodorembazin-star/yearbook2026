@@ -21,6 +21,8 @@ type Props = {
   event: Event;
   photos: Photo[];
   isAdmin?: boolean;
+  canMutate?: boolean;
+  events?: Event[];
   onClose: () => void;
   onPhotoUpdate?: (id: string, patch: Partial<Photo>) => void;
   onPhotoDelete?: (id: string) => void;
@@ -30,6 +32,8 @@ export default function EventModal({
   event,
   photos,
   isAdmin = false,
+  canMutate = true,
+  events = [],
   onClose,
   onPhotoUpdate,
   onPhotoDelete,
@@ -156,6 +160,7 @@ export default function EventModal({
                 photo={p}
                 variantClass={VARIANT_CLASS[variants.get(p.id) ?? "medium"]}
                 isAdmin={isAdmin}
+                canMutate={canMutate}
                 adminToken={adminToken}
                 onOpen={() => setLightbox(p)}
                 onUpdate={onPhotoUpdate}
@@ -169,6 +174,8 @@ export default function EventModal({
       {lightbox && (
         <Lightbox
           photo={lightbox}
+          canMutate={canMutate}
+          events={events}
           onClose={() => setLightbox(null)}
           onUpdate={onPhotoUpdate}
         />
@@ -181,6 +188,7 @@ function EventPhotoCard({
   photo,
   variantClass,
   isAdmin,
+  canMutate,
   adminToken,
   onOpen,
   onUpdate,
@@ -189,6 +197,7 @@ function EventPhotoCard({
   photo: Photo;
   variantClass: string;
   isAdmin: boolean;
+  canMutate: boolean;
   adminToken: string;
   onOpen: () => void;
   onUpdate?: (id: string, patch: Partial<Photo>) => void;
@@ -224,11 +233,17 @@ function EventPhotoCard({
     e.stopPropagation();
     if (busy) return;
     setBusy("delete");
+    const userName =
+      typeof window !== "undefined"
+        ? localStorage.getItem("yb_name") ?? ""
+        : "";
     try {
-      const res = await fetch(
-        `/api/photos/${photo.id}?admin=${encodeURIComponent(adminToken)}`,
-        { method: "DELETE" },
-      );
+      const qs = new URLSearchParams();
+      if (adminToken) qs.set("admin", adminToken);
+      if (userName) qs.set("name", userName);
+      const res = await fetch(`/api/photos/${photo.id}?${qs.toString()}`, {
+        method: "DELETE",
+      });
       if (res.ok) onDelete?.(photo.id);
     } finally {
       setBusy(null);
@@ -286,36 +301,40 @@ function EventPhotoCard({
         </div>
       </div>
 
-      {isAdmin && (
+      {(isAdmin || canMutate) && (
         <div className="absolute right-2 top-2 z-10 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={toggleHide}
-            disabled={busy !== null}
-            aria-label={isHidden ? "Afficher" : "Masquer"}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-50"
-          >
-            {busy === "hide" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : isHidden ? (
-              <span className="text-xs">👁</span>
-            ) : (
-              <span className="text-xs">⊘</span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={remove}
-            disabled={busy !== null}
-            aria-label="Supprimer"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-red-600/80 hover:text-white disabled:opacity-50"
-          >
-            {busy === "delete" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={toggleHide}
+              disabled={busy !== null}
+              aria-label={isHidden ? "Afficher" : "Masquer"}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-50"
+            >
+              {busy === "hide" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isHidden ? (
+                <span className="text-xs">👁</span>
+              ) : (
+                <span className="text-xs">⊘</span>
+              )}
+            </button>
+          )}
+          {canMutate && (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy !== null}
+              aria-label="Supprimer"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-red-600/80 hover:text-white disabled:opacity-50"
+            >
+              {busy === "delete" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>

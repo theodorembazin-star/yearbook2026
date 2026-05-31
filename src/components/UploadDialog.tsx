@@ -299,10 +299,14 @@ export default function UploadDialog({
         onEventCreated?.(fake);
         setEventId(fake.id);
       } else {
+        const userName =
+          typeof window !== "undefined"
+            ? localStorage.getItem("yb_name") ?? ""
+            : "";
         const res = await fetch("/api/events", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title }),
+          body: JSON.stringify({ title, userName: userName || undefined }),
         });
         if (res.ok) {
           const { event } = (await res.json()) as { event: unknown };

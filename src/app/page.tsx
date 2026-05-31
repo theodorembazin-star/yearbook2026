@@ -13,7 +13,7 @@ export default async function Page({
   const isAdmin =
     !!admin && !!process.env.ADMIN_TOKEN && admin === process.env.ADMIN_TOKEN;
 
-  const yearbook = {
+  const yearbookBase = {
     id: YEARBOOK_ID,
     slug: "main",
     title: YEARBOOK_TITLE,
@@ -24,7 +24,7 @@ export default async function Page({
   if (!isServerConfigured()) {
     return (
       <YearbookView
-        yearbook={yearbook}
+        yearbook={{ ...yearbookBase, locked: false }}
         photos={demoPhotos}
         people={demoPeople}
         events={[]}
@@ -77,7 +77,17 @@ export default async function Page({
       return first;
     }
 
-    const [{ data: photos }, { data: people }, { data: events }] =
+    async function loadLocked(): Promise<boolean> {
+      const { data, error } = await supabase
+        .from("yearbooks")
+        .select("locked")
+        .eq("id", YEARBOOK_ID)
+        .maybeSingle();
+      if (error) return false;
+      return Boolean((data as { locked?: boolean } | null)?.locked);
+    }
+
+    const [{ data: photos }, { data: people }, { data: events }, locked] =
       await Promise.all([
         loadPhotos(),
         supabase
@@ -86,11 +96,12 @@ export default async function Page({
           .eq("yearbook_id", YEARBOOK_ID)
           .order("created_at", { ascending: true }),
         loadEvents(),
+        loadLocked(),
       ]);
 
     return (
       <YearbookView
-        yearbook={yearbook}
+        yearbook={{ ...yearbookBase, locked }}
         photos={(photos ?? []).map(photoFromRow as never)}
         people={(people ?? []).map(personFromRow)}
         events={(events ?? []).map(eventFromRow as never)}
@@ -101,7 +112,7 @@ export default async function Page({
     console.warn("Falling back to demo dataset:", e);
     return (
       <YearbookView
-        yearbook={yearbook}
+        yearbook={{ ...yearbookBase, locked: false }}
         photos={demoPhotos}
         people={demoPeople}
         events={[]}

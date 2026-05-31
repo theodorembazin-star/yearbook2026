@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin, isServerConfigured } from "@/lib/supabase/server";
 import { YEARBOOK_ID } from "@/lib/config";
+import { audit, checkUnlocked } from "@/lib/audit";
+
+function isAdmin(req: Request): boolean {
+  const adminToken = process.env.ADMIN_TOKEN;
+  if (!adminToken) return false;
+  const url = new URL(req.url);
+  const fromQuery = url.searchParams.get("admin");
+  const fromHeader = req.headers.get("x-admin-token");
+  return fromQuery === adminToken || fromHeader === adminToken;
+}
 
 // GET /api/events — list events for the current yearbook.
 export async function GET() {
@@ -26,6 +36,7 @@ export async function GET() {
 // POST /api/events — anyone can create an event (open auth, like uploads).
 const CreateBody = z.object({
   title: z.string().min(1).max(80),
+  userName: z.string().max(40).optional(),
 });
 
 export async function POST(req: Request) {
@@ -38,6 +49,10 @@ export async function POST(req: Request) {
   }
 
   const supabase = supabaseAdmin();
+  if (!(await checkUnlocked(supabase, isAdmin(req)))) {
+    return NextResponse.json({ error: "locked" }, { status: 423 });
+  }
+
   const { data, error } = await supabase
     .from("events")
     .insert({ yearbook_id: YEARBOOK_ID, title: parsed.data.title.trim() })
@@ -49,5 +64,11 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+  await audit(supabase, {
+    userName: parsed.data.userName,
+    action: "create_event",
+    targetId: (data as { id: string }).id,
+    details: { title: parsed.data.title.trim() },
+  });
   return NextResponse.json({ event: data });
 }

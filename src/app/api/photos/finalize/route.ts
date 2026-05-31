@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin, isServerConfigured } from "@/lib/supabase/server";
 import { YEARBOOK_ID } from "@/lib/config";
+import { audit, checkUnlocked } from "@/lib/audit";
+
+function isAdmin(req: Request): boolean {
+  const adminToken = process.env.ADMIN_TOKEN;
+  if (!adminToken) return false;
+  const url = new URL(req.url);
+  const fromQuery = url.searchParams.get("admin");
+  const fromHeader = req.headers.get("x-admin-token");
+  return fromQuery === adminToken || fromHeader === adminToken;
+}
 
 const Body = z.object({
   photoId: z.string().uuid(),
@@ -24,6 +34,10 @@ export async function POST(req: Request) {
   }
 
   const supabase = supabaseAdmin();
+
+  if (!(await checkUnlocked(supabase, isAdmin(req)))) {
+    return NextResponse.json({ error: "locked" }, { status: 423 });
+  }
 
   const { data: contrib } = await supabase
     .from("contributors")
@@ -68,6 +82,13 @@ export async function POST(req: Request) {
     }));
     await supabase.from("photo_people").upsert(rows, { onConflict: "photo_id,person_id" });
   }
+
+  await audit(supabase, {
+    userName: parsed.data.uploaderName,
+    action: "upload",
+    targetId: parsed.data.photoId,
+    details: parsed.data.eventId ? { eventId: parsed.data.eventId } : undefined,
+  });
 
   return NextResponse.json({ ok: true });
 }

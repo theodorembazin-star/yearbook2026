@@ -40,6 +40,9 @@ type SectionProps = {
   title: string;
   items: TimelineItem[];
   isAdmin?: boolean;
+  /** false → uploads/edits/moves/deletes are disabled for everyone but admin. */
+  canMutate?: boolean;
+  events?: Event[];
   /** Flat ordered list of orphan photo IDs, used to enable/disable
    *  the up/down arrows on the first/last photo. */
   orphanIds?: string[];
@@ -54,6 +57,8 @@ export default function PhotoSection({
   title,
   items,
   isAdmin = false,
+  canMutate = true,
+  events = [],
   orphanIds,
   onMovePhoto,
   onOpenEvent,
@@ -104,6 +109,8 @@ export default function PhotoSection({
               photo={it.photo}
               variantClass={VARIANT_CLASS[variants.get(it.photo.id) ?? "medium"]}
               isAdmin={isAdmin}
+              canMutate={canMutate}
+              events={events}
               canMoveUp={
                 !!orphanIds && orphanIds.indexOf(it.photo.id) > 0
               }
@@ -207,6 +214,8 @@ function PhotoCard({
   photo,
   variantClass,
   isAdmin,
+  canMutate,
+  events = [],
   canMoveUp,
   canMoveDown,
   onMove,
@@ -216,6 +225,8 @@ function PhotoCard({
   photo: Photo;
   variantClass: string;
   isAdmin: boolean;
+  canMutate: boolean;
+  events?: Event[];
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: (id: string, direction: -1 | 1) => void;
@@ -296,8 +307,8 @@ function PhotoCard({
           </div>
         )}
 
-        {/* Reorder arrows — anyone can move a photo. Hidden until hover. */}
-        {onMove && (
+        {/* Reorder arrows — anyone can move a photo when mutations are open. */}
+        {onMove && canMutate && (
           <div className="absolute left-2 top-2 z-10 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
             <button
               type="button"
@@ -322,10 +333,14 @@ function PhotoCard({
           </div>
         )}
 
-        {isAdmin && (
-          <AdminControls
+        {/* Hover controls: admin gets hide/unhide; everyone gets delete
+            (unless the yearbook is locked). */}
+        {(isAdmin || canMutate) && (
+          <HoverControls
             photo={photo}
             adminToken={adminToken}
+            isAdmin={isAdmin}
+            canDelete={canMutate}
             isHidden={isHidden}
             onUpdate={onUpdate}
             onDelete={onDelete}
@@ -336,6 +351,8 @@ function PhotoCard({
       {open && (
         <Lightbox
           photo={photo}
+          canMutate={canMutate}
+          events={events}
           onClose={() => setOpen(false)}
           onUpdate={onUpdate}
         />
@@ -344,15 +361,19 @@ function PhotoCard({
   );
 }
 
-function AdminControls({
+function HoverControls({
   photo,
   adminToken,
+  isAdmin,
+  canDelete,
   isHidden,
   onUpdate,
   onDelete,
 }: {
   photo: Photo;
   adminToken: string;
+  isAdmin: boolean;
+  canDelete: boolean;
   isHidden: boolean;
   onUpdate?: (id: string, patch: Partial<Photo>) => void;
   onDelete?: (id: string) => void;
@@ -383,11 +404,17 @@ function AdminControls({
     e.stopPropagation();
     if (busy) return;
     setBusy("delete");
+    const userName =
+      typeof window !== "undefined"
+        ? localStorage.getItem("yb_name") ?? ""
+        : "";
     try {
-      const res = await fetch(
-        `/api/photos/${photo.id}?admin=${encodeURIComponent(adminToken)}`,
-        { method: "DELETE" },
-      );
+      const qs = new URLSearchParams();
+      if (adminToken) qs.set("admin", adminToken);
+      if (userName) qs.set("name", userName);
+      const res = await fetch(`/api/photos/${photo.id}?${qs.toString()}`, {
+        method: "DELETE",
+      });
       if (res.ok) onDelete?.(photo.id);
     } finally {
       setBusy(null);
@@ -396,36 +423,40 @@ function AdminControls({
 
   return (
     <div className="absolute right-2 top-2 z-10 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
-      <button
-        type="button"
-        onClick={toggleHide}
-        disabled={busy !== null}
-        aria-label={isHidden ? "Afficher" : "Masquer"}
-        title={isHidden ? "Afficher" : "Masquer"}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-50"
-      >
-        {busy === "hide" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isHidden ? (
-          <Eye className="h-4 w-4" />
-        ) : (
-          <EyeOff className="h-4 w-4" />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={remove}
-        disabled={busy !== null}
-        aria-label="Supprimer"
-        title="Supprimer"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-red-600/80 hover:text-white disabled:opacity-50"
-      >
-        {busy === "delete" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Trash2 className="h-4 w-4" />
-        )}
-      </button>
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={toggleHide}
+          disabled={busy !== null}
+          aria-label={isHidden ? "Afficher" : "Masquer"}
+          title={isHidden ? "Afficher" : "Masquer"}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-50"
+        >
+          {busy === "hide" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isHidden ? (
+            <Eye className="h-4 w-4" />
+          ) : (
+            <EyeOff className="h-4 w-4" />
+          )}
+        </button>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy !== null}
+          aria-label="Supprimer"
+          title="Supprimer"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-red-600/80 hover:text-white disabled:opacity-50"
+        >
+          {busy === "delete" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -444,10 +475,14 @@ function isoToLocalInput(iso: string): string {
 
 export function Lightbox({
   photo,
+  canMutate = true,
+  events = [],
   onClose,
   onUpdate,
 }: {
   photo: Photo;
+  canMutate?: boolean;
+  events?: Event[];
   onClose: () => void;
   onUpdate?: (id: string, patch: Partial<Photo>) => void;
 }) {
@@ -456,6 +491,7 @@ export function Lightbox({
   const [editing, setEditing] = useState(false);
   const [draftCaption, setDraftCaption] = useState(photo.caption ?? "");
   const [draftDate, setDraftDate] = useState(isoToLocalInput(photo.taken_at));
+  const [draftEventId, setDraftEventId] = useState<string>(photo.event_id ?? "");
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -493,6 +529,7 @@ export function Lightbox({
   function startEdit() {
     setDraftCaption(photo.caption ?? "");
     setDraftDate(isoToLocalInput(photo.taken_at));
+    setDraftEventId(photo.event_id ?? "");
     setEditError(null);
     setEditing(true);
   }
@@ -513,7 +550,17 @@ export function Lightbox({
         const newIso = new Date(draftDate).toISOString();
         if (newIso !== photo.taken_at) body.takenAt = newIso;
       }
-      if (Object.keys(body).length === 0) {
+      const currentEvent = photo.event_id ?? "";
+      if (draftEventId !== currentEvent) {
+        body.eventId = draftEventId === "" ? null : draftEventId;
+      }
+      const userName =
+        typeof window !== "undefined"
+          ? localStorage.getItem("yb_name") ?? ""
+          : "";
+      if (userName) body.userName = userName;
+
+      if (Object.keys(body).filter((k) => k !== "userName").length === 0) {
         setEditing(false);
         return;
       }
@@ -527,8 +574,22 @@ export function Lightbox({
         throw new Error(j?.error ?? `error_${res.status}`);
       }
       onUpdate?.(photo.id, {
-        caption: typeof body.caption === "string" ? (body.caption as string) : body.caption === null ? undefined : photo.caption,
-        taken_at: typeof body.takenAt === "string" ? (body.takenAt as string) : photo.taken_at,
+        caption:
+          typeof body.caption === "string"
+            ? (body.caption as string)
+            : body.caption === null
+              ? undefined
+              : photo.caption,
+        taken_at:
+          typeof body.takenAt === "string"
+            ? (body.takenAt as string)
+            : photo.taken_at,
+        event_id:
+          body.eventId === null
+            ? undefined
+            : typeof body.eventId === "string"
+              ? (body.eventId as string)
+              : photo.event_id,
       });
       setEditing(false);
     } catch (err) {
@@ -575,38 +636,55 @@ export function Lightbox({
               maxLength={280}
               className="w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-accent"
             />
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <input
                 type="datetime-local"
                 value={draftDate}
                 onChange={(e) => setDraftDate(e.target.value)}
                 className="rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-accent"
               />
-              <div className="flex items-center gap-2">
-                {editError && (
-                  <span className="text-xs text-red-300">{editError}</span>
+              <label className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-white">
+                <Layers className="h-4 w-4 text-white/60" />
+                <select
+                  value={draftEventId}
+                  onChange={(e) => setDraftEventId(e.target.value)}
+                  className="bg-transparent text-white outline-none"
+                >
+                  <option value="" className="text-ink">
+                    Aucun évènement
+                  </option>
+                  {events.map((ev) => (
+                    <option key={ev.id} value={ev.id} className="text-ink">
+                      {ev.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {editError && (
+                <span className="text-xs text-red-300">{editError}</span>
+              )}
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-2 text-sm text-white/75 hover:border-white/30 hover:text-white/90"
+              >
+                <X className="h-4 w-4" /> Annuler
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded-full bg-accent px-4 py-2 text-sm text-cream shadow-lg shadow-accent/20 disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
                 )}
-                <button
-                  type="button"
-                  onClick={cancelEdit}
-                  className="inline-flex items-center gap-1 rounded-full border border-white/15 px-3 py-2 text-sm text-white/75 hover:border-white/30 hover:text-white/90"
-                >
-                  <X className="h-4 w-4" /> Annuler
-                </button>
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1 rounded-full bg-accent px-4 py-2 text-sm text-cream shadow-lg shadow-accent/20 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  Enregistrer
-                </button>
-              </div>
+                Enregistrer
+              </button>
             </div>
           </div>
         ) : (
@@ -620,15 +698,17 @@ export function Lightbox({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={startEdit}
-                aria-label="Modifier"
-                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-white/20 hover:text-white"
-              >
-                <Pencil className="h-4 w-4" />
-                Modifier
-              </button>
+              {canMutate && (
+                <button
+                  type="button"
+                  onClick={startEdit}
+                  aria-label="Modifier"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur transition hover:bg-white/20 hover:text-white"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Modifier
+                </button>
+              )}
               <button
                 type="button"
                 onClick={download}

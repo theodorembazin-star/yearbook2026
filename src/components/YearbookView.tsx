@@ -39,11 +39,15 @@ export default function YearbookView({
   const [photos, setPhotos] = useState<Photo[]>(initial);
   const [people, setPeople] = useState<Person[]>(initialPeople);
   const [events, setEvents] = useState<Event[]>(initialEvents);
+  const [locked, setLocked] = useState<boolean>(Boolean(yearbook.locked));
   const [uploadOpen, setUploadOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [activePeople, setActivePeople] = useState<string[]>([]);
   const [openEventId, setOpenEventId] = useState<string | null>(null);
+
+  // Mutations are gated by 'locked && !isAdmin'.
+  const canMutate = isAdmin || !locked;
 
   // Close the info popover when the user clicks anywhere else.
   useEffect(() => {
@@ -114,6 +118,14 @@ export default function YearbookView({
         "postgres_changes",
         { event: "*", schema: "public", table: "events", filter: `yearbook_id=eq.${YEARBOOK_ID}` },
         () => void refreshPhotos(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "yearbooks", filter: `id=eq.${YEARBOOK_ID}` },
+        (payload) => {
+          const next = payload.new as { locked?: boolean };
+          if (typeof next.locked === "boolean") setLocked(next.locked);
+        },
       )
       .on(
         "postgres_changes",
@@ -487,10 +499,17 @@ export default function YearbookView({
             </div>
           )}
 
+          {!canMutate && (
+            <div className="mt-2 mb-4 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs text-amber-100/80">
+              Les modifications sont actuellement désactivées par l'admin.
+            </div>
+          )}
+
           {sections.length === 0 ? (
             <EmptyState
               isAdmin={isAdmin}
               hasPeople={people.length > 0}
+              canMutate={canMutate}
               onUploadClick={() => setUploadOpen(true)}
               onAdminClick={() => setAdminOpen(true)}
             />
@@ -502,8 +521,10 @@ export default function YearbookView({
                 title={s.title}
                 items={s.items}
                 isAdmin={isAdmin}
+                canMutate={canMutate}
+                events={events}
                 orphanIds={orphanIds}
-                onMovePhoto={moveOrphan}
+                onMovePhoto={canMutate ? moveOrphan : undefined}
                 onOpenEvent={(id) => setOpenEventId(id)}
                 onPhotoUpdate={(id, patch) => {
                   optimisticUpdate(id, patch);
@@ -581,15 +602,17 @@ export default function YearbookView({
             <Settings className="h-4 w-4" />
           </button>
         )}
-        <button
-          onClick={() => setUploadOpen(true)}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/85 shadow-sm backdrop-blur transition hover:bg-white/20 hover:text-white",
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter une photo
-        </button>
+        {canMutate && (
+          <button
+            onClick={() => setUploadOpen(true)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/85 shadow-sm backdrop-blur transition hover:bg-white/20 hover:text-white",
+            )}
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter une photo
+          </button>
+        )}
       </div>
 
       <UploadDialog
@@ -613,6 +636,7 @@ export default function YearbookView({
         open={adminOpen}
         onClose={() => setAdminOpen(false)}
         people={people}
+        locked={locked}
         demo={demo}
       />
 
@@ -621,6 +645,8 @@ export default function YearbookView({
           event={openEvent}
           photos={openEventPhotos}
           isAdmin={isAdmin}
+          canMutate={canMutate}
+          events={events}
           onClose={() => setOpenEventId(null)}
           onPhotoUpdate={(id, patch) => {
             optimisticUpdate(id, patch);
@@ -671,11 +697,13 @@ function Stats({
 function EmptyState({
   isAdmin,
   hasPeople,
+  canMutate,
   onUploadClick,
   onAdminClick,
 }: {
   isAdmin: boolean;
   hasPeople: boolean;
+  canMutate: boolean;
   onUploadClick: () => void;
   onAdminClick: () => void;
 }) {
@@ -689,12 +717,14 @@ function EmptyState({
         Sois le premier à en déposer pour démarrer la frise.
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <button
-          onClick={onUploadClick}
-          className="rounded-full bg-accent px-6 py-3 text-cream"
-        >
-          Ajouter des photos
-        </button>
+        {canMutate && (
+          <button
+            onClick={onUploadClick}
+            className="rounded-full bg-accent px-6 py-3 text-cream"
+          >
+            Ajouter des photos
+          </button>
+        )}
         {isAdmin && !hasPeople && (
           <button
             onClick={onAdminClick}
