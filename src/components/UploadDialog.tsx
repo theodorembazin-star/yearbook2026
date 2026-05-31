@@ -337,14 +337,16 @@ export default function UploadDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-white/10 bg-[#0d1422]/85 p-8 text-white/85 shadow-2xl backdrop-blur-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-3xl border border-white/10 bg-[#0d1422]/85 text-white/85 shadow-2xl backdrop-blur-2xl">
         <button
           onClick={onClose}
           aria-label="Fermer"
-          className="absolute right-4 top-4 rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
+          className="absolute right-4 top-4 z-10 rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white"
         >
           <X className="h-5 w-5" />
         </button>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-8 pb-4">
 
         <h2 className="font-display text-3xl font-bold tracking-tight text-white/90">
           Ajouter des photos
@@ -601,7 +603,10 @@ export default function UploadDialog({
           </div>
         )}
 
-        <div className="mt-8 flex justify-end gap-3">
+        </div>
+
+        {/* Sticky action bar so the publish button is always visible. */}
+        <div className="flex justify-end gap-3 rounded-b-3xl border-t border-white/10 bg-[#0d1422]/95 px-8 py-4 backdrop-blur">
           <button
             onClick={onClose}
             className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/75 transition hover:border-white/30 hover:text-white/90"
