@@ -311,59 +311,136 @@ export default function YearbookView({
     [openEventId, events],
   );
 
-  // ---------- Reorder by up/down arrows (across all sections) ----------
-  // Move the orphan photo `id` by `direction` (-1 = up, +1 = down) in the
-  // flat order. Server save on every click: PATCH sort_at, then refetch
-  // to reflect the truth. If the save fails (e.g. migration 0007 not
-  // applied) the refetch reverts the optimistic update.
+  // ---------- Reorder via up/down arrows ----------
+  // Règles:
+  //  - Si la photo n'est PAS au bord de son mois, on INVERTIT sort_at avec
+  //    son voisin direct dans le même mois (1 PATCH × 2).
+  //  - Si la photo est au début/fin du mois, elle SAUTE simplement au mois
+  //    précédent / suivant (placée à 1 minute après le dernier, ou 1 minute
+  //    avant le premier de ce mois adjacent, clampée pour rester dedans).
   async function moveOrphan(id: string, direction: -1 | 1) {
-    const idx = orphanIds.indexOf(id);
-    if (idx < 0) return;
-    const target = idx + direction;
-    if (target < 0 || target >= orphanIds.length) return;
-
-    const next = orphanIds.slice();
-    next.splice(idx, 1);
-    next.splice(target, 0, id);
-
-    const findSort = (pid: string) => {
-      const p = photos.find((x) => x.id === pid);
-      return p ? (p.sort_at ?? p.taken_at) : null;
-    };
-    const prevId = next[target - 1] ?? null;
-    const nextId = next[target + 1] ?? null;
-    const prevSort = prevId ? findSort(prevId) : null;
-    const nextSort = nextId ? findSort(nextId) : null;
-
-    let newMs: number;
-    if (prevSort && nextSort) {
-      newMs = (new Date(prevSort).getTime() + new Date(nextSort).getTime()) / 2;
-    } else if (prevSort) {
-      newMs = new Date(prevSort).getTime() + 60 * 1000;
-    } else if (nextSort) {
-      newMs = new Date(nextSort).getTime() - 60 * 1000;
-    } else {
-      newMs = Date.now();
+    // Groupe les photos orphelines par mois (sort_at), trié.
+    const orphans = photos
+      .filter((p) => !p.event_id)
+      .slice()
+      .sort(
+        (a, b) =>
+          +new Date(a.sort_at ?? a.taken_at) -
+          +new Date(b.sort_at ?? b.taken_at),
+      );
+    const groups = new Map<string, Photo[]>();
+    for (const p of orphans) {
+      const k = monthKey(p.sort_at ?? p.taken_at);
+      const list = groups.get(k) ?? [];
+      list.push(p);
+      groups.set(k, list);
     }
-    const newSort = new Date(newMs).toISOString();
+    const orphanMonths = Array.from(groups.entries()).map(([key, list]) => ({
+      key,
+      list,
+    }));
 
-    optimisticUpdate(id, { sort_at: newSort });
+    // Localise la photo (section + position dans la section).
+    let sectionIdx = -1;
+    let inIdx = -1;
+    for (let i = 0; i < orphanMonths.length; i++) {
+      const idxIn = orphanMonths[i].list.findIndex((p) => p.id === id);
+      if (idxIn >= 0) {
+        sectionIdx = i;
+        inIdx = idxIn;
+        break;
+      }
+    }
+    if (sectionIdx < 0) return;
+    const me = orphanMonths[sectionIdx].list[inIdx];
+    const mySort = me.sort_at ?? me.taken_at;
+
+    type Patch = { id: string; sortAt: string };
+    const patches: Patch[] = [];
+
+    if (direction === -1) {
+      // ↑
+      if (inIdx > 0) {
+        // Inversion avec le voisin précédent dans la même section.
+        const neighbor = orphanMonths[sectionIdx].list[inIdx - 1];
+        const neighborSort = neighbor.sort_at ?? neighbor.taken_at;
+        patches.push({ id: me.id, sortAt: neighborSort });
+        patches.push({ id: neighbor.id, sortAt: mySort });
+      } else {
+        // Premier du mois → fin du mois précédent (ou rien si pas de mois précédent).
+        const prev = orphanMonths[sectionIdx - 1];
+        if (!prev) return;
+        const last = prev.list[prev.list.length - 1];
+        const lastDate = new Date(last.sort_at ?? last.taken_at);
+        let candidate = new Date(lastDate.getTime() + 60 * 1000);
+        const endOfPrev = new Date(
+          lastDate.getFullYear(),
+          lastDate.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
+        if (candidate > endOfPrev) candidate = endOfPrev;
+        patches.push({ id: me.id, sortAt: candidate.toISOString() });
+      }
+    } else {
+      // ↓
+      const sectionList = orphanMonths[sectionIdx].list;
+      if (inIdx < sectionList.length - 1) {
+        // Inversion avec le voisin suivant dans la même section.
+        const neighbor = sectionList[inIdx + 1];
+        const neighborSort = neighbor.sort_at ?? neighbor.taken_at;
+        patches.push({ id: me.id, sortAt: neighborSort });
+        patches.push({ id: neighbor.id, sortAt: mySort });
+      } else {
+        // Dernier du mois → début du mois suivant.
+        const next = orphanMonths[sectionIdx + 1];
+        if (!next) return;
+        const first = next.list[0];
+        const firstDate = new Date(first.sort_at ?? first.taken_at);
+        let candidate = new Date(firstDate.getTime() - 60 * 1000);
+        const startOfNext = new Date(
+          firstDate.getFullYear(),
+          firstDate.getMonth(),
+          1,
+          0,
+          0,
+          0,
+          0,
+        );
+        if (candidate < startOfNext) candidate = startOfNext;
+        patches.push({ id: me.id, sortAt: candidate.toISOString() });
+      }
+    }
+
+    // Optimistic local update so the UI moves instantly.
+    for (const p of patches) optimisticUpdate(p.id, { sort_at: p.sortAt });
+
     try {
-      const res = await fetch(`/api/photos/${id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sortAt: newSort }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.error("Move PATCH failed", res.status, body);
-        if (
-          typeof window !== "undefined" &&
-          /sort_at/i.test(JSON.stringify(body))
-        ) {
-          window.alert(
-            "Sauvegarde impossible : applique la migration Supabase 0007_sort_at.sql.",
-          );
+      const results = await Promise.all(
+        patches.map((p) =>
+          fetch(`/api/photos/${p.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ sortAt: p.sortAt }),
+          }),
+        ),
+      );
+      for (const res of results) {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          console.error("Move PATCH failed", res.status, body);
+          if (
+            typeof window !== "undefined" &&
+            /sort_at/i.test(JSON.stringify(body))
+          ) {
+            window.alert(
+              "Sauvegarde impossible : applique la migration Supabase 0007_sort_at.sql.",
+            );
+            break;
+          }
         }
       }
     } catch (e) {
