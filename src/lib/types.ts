@@ -47,6 +47,7 @@ export type Event = {
   title: string;
   cover_photo_id?: string;
   created_at: string;
+  sort_at?: string;
 };
 
 export type AuditAction =

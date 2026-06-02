@@ -165,7 +165,7 @@ export default function YearbookView({
   // Build the timeline items: orphan photos as single tiles, events as
   // bundle tiles. Order is driven by sort_at (so DnD wins over date edits).
   // Events surface at their earliest photo's sort_at.
-  const { sections, orphanIds } = useMemo(() => {
+  const { sections, orphanIds, eventTimelineIds } = useMemo(() => {
     const eventPhotos = new Map<string, Photo[]>();
     const orphans: Photo[] = [];
     for (const p of filtered) {
@@ -194,15 +194,17 @@ export default function YearbookView({
       );
       if (list.length === 0) continue;
       const cover = list.find((p) => p.id === ev.cover_photo_id) ?? list[0];
-      const firstSort = list[0].sort_at ?? list[0].taken_at;
+      // sort_at de l'event prime ; fallback : 1re photo, puis created_at.
+      const evSort =
+        ev.sort_at ?? list[0].sort_at ?? list[0].taken_at ?? ev.created_at;
       items.push({
-        _date: +new Date(firstSort),
+        _date: +new Date(evSort),
         kind: "event",
         bundle: {
           event: ev,
           cover,
           count: list.length,
-          date: firstSort,
+          date: evSort,
         },
       });
     }
@@ -226,14 +228,15 @@ export default function YearbookView({
       items: list,
     }));
 
-    // Flat ordered list of orphan photo IDs across all sections — the
-    // single SortableContext that DnD operates on.
-    const orphanIds = orphans
-      .slice()
-      .sort((a, b) => +new Date((a.sort_at ?? a.taken_at)) - +new Date((b.sort_at ?? b.taken_at)))
-      .map((p) => p.id);
+    // Flat list of orphan photo IDs and event IDs, in timeline order.
+    const orphanIds = items
+      .filter((it): it is Extract<typeof items[number], { kind: "photo" }> => it.kind === "photo")
+      .map((it) => it.photo.id);
+    const eventTimelineIds = items
+      .filter((it): it is Extract<typeof items[number], { kind: "event" }> => it.kind === "event")
+      .map((it) => it.bundle.event.id);
 
-    return { sections, orphanIds };
+    return { sections, orphanIds, eventTimelineIds };
   }, [filtered, events]);
 
   const contributorCount = useMemo(
@@ -324,39 +327,61 @@ export default function YearbookView({
   );
 
   // ---------- Reorder via up/down arrows ----------
-  // Règles:
-  //  - Si la photo n'est PAS au bord de son mois, on INVERTIT sort_at avec
-  //    son voisin direct dans le même mois (1 PATCH × 2).
-  //  - Si la photo est au début/fin du mois, elle SAUTE simplement au mois
-  //    précédent / suivant (placée à 1 minute après le dernier, ou 1 minute
-  //    avant le premier de ce mois adjacent, clampée pour rester dedans).
-  async function moveOrphan(id: string, direction: -1 | 1) {
-    // Groupe les photos orphelines par mois (sort_at), trié.
-    const orphans = photos
-      .filter((p) => !p.event_id)
-      .slice()
-      .sort(
-        (a, b) =>
-          +new Date(a.sort_at ?? a.taken_at) -
-          +new Date(b.sort_at ?? b.taken_at),
-      );
-    const groups = new Map<string, Photo[]>();
-    for (const p of orphans) {
-      const k = monthKey(p.sort_at ?? p.taken_at);
+  // Works for photos AND events. Both share the same mixed timeline,
+  // the same swap-within-month / jump-across-months rules, and the same
+  // optimistic-update + PATCH pipeline. PATCH route differs by kind:
+  // /api/photos/[id] for photos, /api/events/[id] for events.
+  async function moveItem(
+    id: string,
+    kind: "photo" | "event",
+    direction: -1 | 1,
+  ) {
+    // Reconstruit la liste mixte (photos orphelines + events) groupée par mois.
+    type FlatEntry = { id: string; kind: "photo" | "event"; sort_at: string };
+    const entries: FlatEntry[] = [];
+    for (const p of photos) {
+      if (p.event_id) continue;
+      entries.push({
+        id: p.id,
+        kind: "photo",
+        sort_at: p.sort_at ?? p.taken_at,
+      });
+    }
+    for (const ev of events) {
+      // Filtre events sans photos (sinon non rendus).
+      const hasPhotos = photos.some((p) => p.event_id === ev.id);
+      if (!hasPhotos) continue;
+      const evSort =
+        ev.sort_at ??
+        (photos
+          .filter((p) => p.event_id === ev.id)
+          .map((p) => p.sort_at ?? p.taken_at)
+          .sort()[0] ??
+          ev.created_at);
+      entries.push({ id: ev.id, kind: "event", sort_at: evSort });
+    }
+    entries.sort(
+      (a, b) => +new Date(a.sort_at) - +new Date(b.sort_at),
+    );
+
+    const groups = new Map<string, FlatEntry[]>();
+    for (const e of entries) {
+      const k = monthKey(e.sort_at);
       const list = groups.get(k) ?? [];
-      list.push(p);
+      list.push(e);
       groups.set(k, list);
     }
-    const orphanMonths = Array.from(groups.entries()).map(([key, list]) => ({
+    const months = Array.from(groups.entries()).map(([key, list]) => ({
       key,
       list,
     }));
 
-    // Localise la photo (section + position dans la section).
     let sectionIdx = -1;
     let inIdx = -1;
-    for (let i = 0; i < orphanMonths.length; i++) {
-      const idxIn = orphanMonths[i].list.findIndex((p) => p.id === id);
+    for (let i = 0; i < months.length; i++) {
+      const idxIn = months[i].list.findIndex(
+        (e) => e.id === id && e.kind === kind,
+      );
       if (idxIn >= 0) {
         sectionIdx = i;
         inIdx = idxIn;
@@ -364,28 +389,23 @@ export default function YearbookView({
       }
     }
     if (sectionIdx < 0) return;
-    const me = orphanMonths[sectionIdx].list[inIdx];
-    const mySort = me.sort_at ?? me.taken_at;
+    const me = months[sectionIdx].list[inIdx];
+    const mySort = me.sort_at;
 
-    type Patch = { id: string; sortAt: string };
+    type Patch = { id: string; kind: "photo" | "event"; sortAt: string };
     const patches: Patch[] = [];
-
-    // Normalize to UTC ISO (with Z suffix) so the server-side Zod
-    // validator doesn't choke on the +00:00 offset Supabase returns.
     const norm = (s: string) => new Date(s).toISOString();
 
     if (direction === -1) {
-      // ↑
       if (inIdx > 0) {
-        const neighbor = orphanMonths[sectionIdx].list[inIdx - 1];
-        const neighborSort = neighbor.sort_at ?? neighbor.taken_at;
-        patches.push({ id: me.id, sortAt: norm(neighborSort) });
-        patches.push({ id: neighbor.id, sortAt: norm(mySort) });
+        const neighbor = months[sectionIdx].list[inIdx - 1];
+        patches.push({ id: me.id, kind: me.kind, sortAt: norm(neighbor.sort_at) });
+        patches.push({ id: neighbor.id, kind: neighbor.kind, sortAt: norm(mySort) });
       } else {
-        const prev = orphanMonths[sectionIdx - 1];
+        const prev = months[sectionIdx - 1];
         if (!prev) return;
         const last = prev.list[prev.list.length - 1];
-        const lastDate = new Date(last.sort_at ?? last.taken_at);
+        const lastDate = new Date(last.sort_at);
         let candidate = new Date(lastDate.getTime() + 60 * 1000);
         const endOfPrev = new Date(
           lastDate.getFullYear(),
@@ -397,21 +417,19 @@ export default function YearbookView({
           999,
         );
         if (candidate > endOfPrev) candidate = endOfPrev;
-        patches.push({ id: me.id, sortAt: candidate.toISOString() });
+        patches.push({ id: me.id, kind: me.kind, sortAt: candidate.toISOString() });
       }
     } else {
-      // ↓
-      const sectionList = orphanMonths[sectionIdx].list;
-      if (inIdx < sectionList.length - 1) {
-        const neighbor = sectionList[inIdx + 1];
-        const neighborSort = neighbor.sort_at ?? neighbor.taken_at;
-        patches.push({ id: me.id, sortAt: norm(neighborSort) });
-        patches.push({ id: neighbor.id, sortAt: norm(mySort) });
+      const list = months[sectionIdx].list;
+      if (inIdx < list.length - 1) {
+        const neighbor = list[inIdx + 1];
+        patches.push({ id: me.id, kind: me.kind, sortAt: norm(neighbor.sort_at) });
+        patches.push({ id: neighbor.id, kind: neighbor.kind, sortAt: norm(mySort) });
       } else {
-        const next = orphanMonths[sectionIdx + 1];
+        const next = months[sectionIdx + 1];
         if (!next) return;
         const first = next.list[0];
-        const firstDate = new Date(first.sort_at ?? first.taken_at);
+        const firstDate = new Date(first.sort_at);
         let candidate = new Date(firstDate.getTime() - 60 * 1000);
         const startOfNext = new Date(
           firstDate.getFullYear(),
@@ -423,12 +441,20 @@ export default function YearbookView({
           0,
         );
         if (candidate < startOfNext) candidate = startOfNext;
-        patches.push({ id: me.id, sortAt: candidate.toISOString() });
+        patches.push({ id: me.id, kind: me.kind, sortAt: candidate.toISOString() });
       }
     }
 
-    // Optimistic local update so the UI moves instantly.
-    for (const p of patches) optimisticUpdate(p.id, { sort_at: p.sortAt });
+    // Optimistic local updates.
+    for (const p of patches) {
+      if (p.kind === "photo") {
+        optimisticUpdate(p.id, { sort_at: p.sortAt });
+      } else {
+        setEvents((prev) =>
+          prev.map((ev) => (ev.id === p.id ? { ...ev, sort_at: p.sortAt } : ev)),
+        );
+      }
+    }
 
     const userName =
       typeof window !== "undefined"
@@ -438,14 +464,17 @@ export default function YearbookView({
     try {
       const results = await Promise.all(
         patches.map((p) =>
-          fetch(`/api/photos/${p.id}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              sortAt: p.sortAt,
-              userName: userName || undefined,
-            }),
-          }),
+          fetch(
+            p.kind === "photo" ? `/api/photos/${p.id}` : `/api/events/${p.id}`,
+            {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                sortAt: p.sortAt,
+                userName: userName || undefined,
+              }),
+            },
+          ),
         ),
       );
       let failedDetail: string | null = null;
@@ -459,16 +488,12 @@ export default function YearbookView({
       if (failedDetail && typeof window !== "undefined") {
         if (/sort_at/i.test(failedDetail)) {
           window.alert(
-            "Sauvegarde impossible : la colonne sort_at n'existe pas. " +
-              "Applique la migration Supabase 0007_sort_at.sql, " +
-              "puis recharge la page.",
+            "Sauvegarde impossible : applique les migrations Supabase 0007 (photos) et 0009 (events).",
           );
         } else if (/locked/i.test(failedDetail)) {
           window.alert("Les modifications sont actuellement verrouillées par l'admin.");
         } else {
-          window.alert(
-            "Sauvegarde de la position en échec.\n\nDétail :\n" + failedDetail,
-          );
+          window.alert("Sauvegarde de la position en échec.\n\nDétail :\n" + failedDetail);
         }
       }
     } catch (e) {
@@ -476,6 +501,14 @@ export default function YearbookView({
     } finally {
       void refreshPhotos();
     }
+  }
+
+  // Backwards-compatible wrapper for the existing PhotoSection prop.
+  function moveOrphan(id: string, direction: -1 | 1) {
+    return moveItem(id, "photo", direction);
+  }
+  function moveEventItem(id: string, direction: -1 | 1) {
+    return moveItem(id, "event", direction);
   }
 
   return (
@@ -540,7 +573,9 @@ export default function YearbookView({
                 canMutate={canMutate}
                 events={events}
                 orphanIds={orphanIds}
+                eventTimelineIds={eventTimelineIds}
                 onMovePhoto={canMutate ? moveOrphan : undefined}
+                onMoveEvent={canMutate ? moveEventItem : undefined}
                 onOpenEvent={(id) => setOpenEventId(id)}
                 onPhotoUpdate={(id, patch) => {
                   optimisticUpdate(id, patch);

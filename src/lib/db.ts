@@ -49,6 +49,7 @@ export function eventFromRow(row: {
   title: string;
   cover_photo_id?: string | null;
   created_at: string;
+  sort_at?: string | null;
 }): Event {
   return {
     id: row.id,
@@ -56,6 +57,7 @@ export function eventFromRow(row: {
     title: row.title,
     cover_photo_id: row.cover_photo_id ?? undefined,
     created_at: row.created_at,
+    sort_at: row.sort_at ?? undefined,
   };
 }
 

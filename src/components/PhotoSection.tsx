@@ -46,7 +46,9 @@ type SectionProps = {
   /** Flat ordered list of orphan photo IDs, used to enable/disable
    *  the up/down arrows on the first/last photo. */
   orphanIds?: string[];
+  eventTimelineIds?: string[];
   onMovePhoto?: (id: string, direction: -1 | 1) => void;
+  onMoveEvent?: (id: string, direction: -1 | 1) => void;
   onOpenEvent?: (id: string) => void;
   onPhotoUpdate?: (id: string, patch: Partial<Photo>) => void;
   onPhotoDelete?: (id: string) => void;
@@ -60,7 +62,9 @@ export default function PhotoSection({
   canMutate = true,
   events = [],
   orphanIds,
+  eventTimelineIds,
   onMovePhoto,
+  onMoveEvent,
   onOpenEvent,
   onPhotoUpdate,
   onPhotoDelete,
@@ -130,6 +134,18 @@ export default function PhotoSection({
               variantClass={
                 VARIANT_CLASS[variants.get(it.bundle.event.id) ?? "medium"]
               }
+              canMutate={canMutate}
+              canMoveUp={
+                !!eventTimelineIds &&
+                eventTimelineIds.indexOf(it.bundle.event.id) > 0
+              }
+              canMoveDown={
+                !!eventTimelineIds &&
+                eventTimelineIds.indexOf(it.bundle.event.id) >= 0 &&
+                eventTimelineIds.indexOf(it.bundle.event.id) <
+                  eventTimelineIds.length - 1
+              }
+              onMove={onMoveEvent}
               onOpen={() => onOpenEvent?.(it.bundle.event.id)}
             />
           ),
@@ -142,15 +158,29 @@ export default function PhotoSection({
 function EventTile({
   bundle,
   variantClass,
+  canMutate = true,
+  canMoveUp,
+  canMoveDown,
+  onMove,
   onOpen,
 }: {
   bundle: { event: Event; cover: Photo; count: number; date: string };
   variantClass: string;
+  canMutate?: boolean;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (id: string, direction: -1 | 1) => void;
   onOpen: () => void;
 }) {
   const w = bundle.cover.width || 1200;
   const h = bundle.cover.height || 800;
   const isVideo = bundle.cover.kind === "video";
+
+  function move(e: React.MouseEvent, direction: -1 | 1) {
+    e.stopPropagation();
+    onMove?.(bundle.event.id, direction);
+  }
+
   return (
     <div
       role="button"
@@ -188,7 +218,6 @@ function EventTile({
         />
       )}
 
-      {/* Stack indicator + title always visible at the bottom of the tile. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-4">
         <div className="flex items-end justify-between gap-3">
           <p className="font-display text-lg font-semibold leading-tight text-white/90 line-clamp-2">
@@ -201,11 +230,36 @@ function EventTile({
         </div>
       </div>
 
-      {/* Top-right badge to signal it's a group, even before the title fades in. */}
       <div className="pointer-events-none absolute right-2 top-2 inline-flex h-6 items-center gap-1 rounded-full bg-black/50 px-2 text-[10px] uppercase tracking-wider text-white/80 backdrop-blur">
         <Layers className="h-3 w-3" />
         Évènement
       </div>
+
+      {/* Reorder arrows — anyone can move an event when mutations are open. */}
+      {onMove && canMutate && (
+        <div className="absolute left-2 top-2 z-10 flex gap-1.5 opacity-0 transition group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(e) => move(e, -1)}
+            disabled={!canMoveUp}
+            aria-label="Reculer"
+            title="Reculer"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => move(e, 1)}
+            disabled={!canMoveDown}
+            aria-label="Avancer"
+            title="Avancer"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white/85 backdrop-blur transition hover:bg-black/80 disabled:opacity-30"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
