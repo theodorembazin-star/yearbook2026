@@ -370,16 +370,18 @@ export default function YearbookView({
     type Patch = { id: string; sortAt: string };
     const patches: Patch[] = [];
 
+    // Normalize to UTC ISO (with Z suffix) so the server-side Zod
+    // validator doesn't choke on the +00:00 offset Supabase returns.
+    const norm = (s: string) => new Date(s).toISOString();
+
     if (direction === -1) {
       // ↑
       if (inIdx > 0) {
-        // Inversion avec le voisin précédent dans la même section.
         const neighbor = orphanMonths[sectionIdx].list[inIdx - 1];
         const neighborSort = neighbor.sort_at ?? neighbor.taken_at;
-        patches.push({ id: me.id, sortAt: neighborSort });
-        patches.push({ id: neighbor.id, sortAt: mySort });
+        patches.push({ id: me.id, sortAt: norm(neighborSort) });
+        patches.push({ id: neighbor.id, sortAt: norm(mySort) });
       } else {
-        // Premier du mois → fin du mois précédent (ou rien si pas de mois précédent).
         const prev = orphanMonths[sectionIdx - 1];
         if (!prev) return;
         const last = prev.list[prev.list.length - 1];
@@ -401,13 +403,11 @@ export default function YearbookView({
       // ↓
       const sectionList = orphanMonths[sectionIdx].list;
       if (inIdx < sectionList.length - 1) {
-        // Inversion avec le voisin suivant dans la même section.
         const neighbor = sectionList[inIdx + 1];
         const neighborSort = neighbor.sort_at ?? neighbor.taken_at;
-        patches.push({ id: me.id, sortAt: neighborSort });
-        patches.push({ id: neighbor.id, sortAt: mySort });
+        patches.push({ id: me.id, sortAt: norm(neighborSort) });
+        patches.push({ id: neighbor.id, sortAt: norm(mySort) });
       } else {
-        // Dernier du mois → début du mois suivant.
         const next = orphanMonths[sectionIdx + 1];
         if (!next) return;
         const first = next.list[0];

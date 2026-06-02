@@ -16,8 +16,8 @@ function isAdmin(req: Request): boolean {
 const Body = z.object({
   status: z.enum(["hidden", "published"]).optional(),
   caption: z.string().max(280).nullable().optional(),
-  takenAt: z.string().datetime().optional(),
-  sortAt: z.string().datetime().nullable().optional(),
+  takenAt: z.string().datetime({ offset: true }).optional(),
+  sortAt: z.string().datetime({ offset: true }).nullable().optional(),
   eventId: z.string().uuid().nullable().optional(),
   userName: z.string().max(40).optional(),
 });

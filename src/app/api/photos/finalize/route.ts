@@ -17,7 +17,7 @@ const Body = z.object({
   photoId: z.string().uuid(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
-  takenAt: z.string().datetime().optional(),
+  takenAt: z.string().datetime({ offset: true }).optional(),
   caption: z.string().max(280).optional(),
   uploaderName: z.string().min(1).max(40),
   peopleIds: z.array(z.string().uuid()).optional(),

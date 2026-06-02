@@ -15,7 +15,7 @@ function isAdmin(req: Request): boolean {
 
 const Body = z.object({
   contentType: z.string().regex(/^(image|video)\//),
-  takenAt: z.string().datetime().optional(),
+  takenAt: z.string().datetime({ offset: true }).optional(),
   caption: z.string().max(280).optional(),
 });
 
