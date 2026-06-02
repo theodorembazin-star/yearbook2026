@@ -430,29 +430,45 @@ export default function YearbookView({
     // Optimistic local update so the UI moves instantly.
     for (const p of patches) optimisticUpdate(p.id, { sort_at: p.sortAt });
 
+    const userName =
+      typeof window !== "undefined"
+        ? localStorage.getItem("yb_name") ?? ""
+        : "";
+
     try {
       const results = await Promise.all(
         patches.map((p) =>
           fetch(`/api/photos/${p.id}`, {
             method: "PATCH",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ sortAt: p.sortAt }),
+            body: JSON.stringify({
+              sortAt: p.sortAt,
+              userName: userName || undefined,
+            }),
           }),
         ),
       );
+      let failedDetail: string | null = null;
       for (const res of results) {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           console.error("Move PATCH failed", res.status, body);
-          if (
-            typeof window !== "undefined" &&
-            /sort_at/i.test(JSON.stringify(body))
-          ) {
-            window.alert(
-              "Sauvegarde impossible : applique la migration Supabase 0007_sort_at.sql.",
-            );
-            break;
-          }
+          failedDetail = JSON.stringify(body);
+        }
+      }
+      if (failedDetail && typeof window !== "undefined") {
+        if (/sort_at/i.test(failedDetail)) {
+          window.alert(
+            "Sauvegarde impossible : la colonne sort_at n'existe pas. " +
+              "Applique la migration Supabase 0007_sort_at.sql, " +
+              "puis recharge la page.",
+          );
+        } else if (/locked/i.test(failedDetail)) {
+          window.alert("Les modifications sont actuellement verrouillées par l'admin.");
+        } else {
+          window.alert(
+            "Sauvegarde de la position en échec.\n\nDétail :\n" + failedDetail,
+          );
         }
       }
     } catch (e) {
